@@ -4,13 +4,14 @@
 --
 -- Checked against the Forever UI source (RaidMarkersDocumentation.lua):
 -- SetRaidTarget HasRestrictions (addons may not call it) and
--- GetRaidTargetIndex has SecretReturns, so an addon can never read a mark.
+-- GetRaidTargetIndex has SecretReturns: secret while an addon restriction
+-- is active (combat, encounter, PvP match, ...), readable otherwise.
 -- The marks therefore go on through Blizzard's secure "raidtarget" action
 -- with action "set": it checks the mark in secure code and only sets it,
 -- never toggles it off like /tm does. A "Mark group" button (also bindable
 -- under Keybindings > AddOns) clicks one hidden mark button per player.
--- Which marks this session already set is remembered per GUID, so the
--- button pops up only for players that still need one.
+-- The button pops up only for players that still need a mark: read from
+-- the game when possible, else from what our clicks set (per GUID).
 local _, root = ...
 local am = {}
 root.AutoMark = am
@@ -121,13 +122,21 @@ function am.Evaluate()
     end
     if unknown then return nil, "unknown" end
     if db.self > 0 then wanted[#wanted + 1] = { "player", db.self } end
-    -- the current mark is unreadable (secret): go by what our clicks set
+    -- Outside addon restrictions (combat, encounter, PvP match, ...) the
+    -- mark is readable: trust it. While it is secret, go by our clicks.
     local missing = {}
     for _, w in ipairs(wanted) do
         local guid = UnitGUID(w[1])
-        if not (guid and not issecret(guid) and am.applied[guid] == w[2]) then
-            missing[#missing + 1] = w
+        if issecret(guid) then guid = nil end
+        local current = GetRaidTargetIndex(w[1])
+        local done
+        if issecret(current) then
+            done = guid ~= nil and am.applied[guid] == w[2]
+        else
+            done = current == w[2]
+            if guid then am.applied[guid] = done and w[2] or nil end
         end
+        if not done then missing[#missing + 1] = w end
     end
     return missing, wanted
 end
@@ -327,6 +336,9 @@ events:SetScript("OnEvent", function(self, event, arg)
         RestorePosition()
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
         self:RegisterEvent("GROUP_ROSTER_UPDATE")
+        self:RegisterEvent("RAID_TARGET_UPDATE")
+    elseif event == "RAID_TARGET_UPDATE" then
+        if button:IsShown() then am.Apply(false) end -- all on: hide
     elseif event == "PLAYER_ENTERING_WORLD" then
         Snapshot() -- a reload in a group is not a new invite
         am.Apply(false) -- arm the key binding again (pops up only if a mark is missing)
