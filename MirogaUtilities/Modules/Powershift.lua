@@ -43,14 +43,19 @@ local function UpdateBearSpell()
         return
     end
     watcher:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    -- Dire Bear Form (level 40) always wins over Bear Form
+    local spell = BEAR_FORM
     for i = 1, GetNumShapeshiftForms() do
         local _, _, _, spellID = GetShapeshiftFormInfo(i)
-        if spellID == DIRE_BEAR_FORM or spellID == BEAR_FORM then
-            bearButton:SetAttribute("spell", spellID)
-            return
-        end
+        if spellID == DIRE_BEAR_FORM then spell = DIRE_BEAR_FORM end
     end
+    if spell ~= DIRE_BEAR_FORM and C_SpellBook and C_SpellBook.IsSpellKnown
+        and C_SpellBook.IsSpellKnown(DIRE_BEAR_FORM) then
+        spell = DIRE_BEAR_FORM
+    end
+    bearButton:SetAttribute("spell", spell)
 end
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 watcher:RegisterEvent("UPDATE_SHAPESHIFT_FORMS")
+watcher:RegisterEvent("SPELLS_CHANGED")
 watcher:SetScript("OnEvent", UpdateBearSpell)
