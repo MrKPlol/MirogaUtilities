@@ -2,11 +2,15 @@
 -- raid mark (plus an optional one for you). When someone joins the party and
 -- everyone in it is on the list (no stranger), the marks are ready.
 --
--- Forever blocks SetRaidTarget for addons (HasRestrictions), so the marks go
--- on through the secure /tm path: a small "Mark group" button pops up (also
--- bindable under Keybindings > AddOns), one click or key press marks all.
--- The button only carries the marks that are still missing, because /tm
--- removes a mark that is already on the unit.
+-- Checked against the Forever UI source (RaidMarkersDocumentation.lua):
+-- SetRaidTarget HasRestrictions (addons may not call it) and
+-- GetRaidTargetIndex has SecretReturns, so an addon can never read a mark.
+-- The marks therefore go on through Blizzard's secure "raidtarget" action
+-- with action "set": it checks the mark in secure code and only sets it,
+-- never toggles it off like /tm does. A "Mark group" button (also bindable
+-- under Keybindings > AddOns) clicks one hidden mark button per player.
+-- Which marks this session already set is remembered per GUID, so the
+-- button pops up only for players that still need one.
 local _, root = ...
 local am = {}
 root.AutoMark = am
@@ -19,7 +23,6 @@ local BUTTON = "MirogaAutoMarkButton"
 _G["BINDING_NAME_CLICK " .. BUTTON .. ":LeftButton"] = "Auto Mark: mark group"
 
 am.SLOTS = SLOTS
-am.applied = {}       -- GUID -> mark the last click put on, this session
 am.DEFAULTS = { enabled = true, self = 0, slots = {} }
 local DEFAULT_MARKS = { 1, 2, 3, 4 } -- star, circle, diamond, triangle
 
@@ -56,7 +59,9 @@ local function InitDB()
         if type(s.name) ~= "string" then s.name = "" end
         if type(s.mark) ~= "number" then s.mark = DEFAULT_MARKS[i] end
     end
+    if type(db.applied) ~= "table" then db.applied = {} end -- GUID -> mark our click set
     am.db = db
+    am.applied = db.applied
 end
 
 -- "First" matches every surname, "First Surname" only that character.
@@ -94,7 +99,7 @@ end
 -- ---------------------------------------------------------------------------
 -- the check: only your listed players in the party, nobody else
 
--- Returns the missing marks as { unit, mark } pairs, or nil plus a reason.
+-- Returns missing and wanted marks as { unit, mark } pairs, or nil + reason.
 function am.Evaluate()
     local db = am.db
     if not db or not db.enabled then return nil, "off" end
@@ -116,21 +121,15 @@ function am.Evaluate()
     end
     if unknown then return nil, "unknown" end
     if db.self > 0 then wanted[#wanted + 1] = { "player", db.self } end
-    -- Forever may hand the current mark back as a secret: then trust what
-    -- the last click put on that player.
+    -- the current mark is unreadable (secret): go by what our clicks set
     local missing = {}
     for _, w in ipairs(wanted) do
-        local current = GetRaidTargetIndex(w[1])
-        local done
-        if issecret(current) then
-            local guid = UnitGUID(w[1])
-            done = guid and not issecret(guid) and am.applied[guid] == w[2]
-        else
-            done = current == w[2]
+        local guid = UnitGUID(w[1])
+        if not (guid and not issecret(guid) and am.applied[guid] == w[2]) then
+            missing[#missing + 1] = w
         end
-        if not done then missing[#missing + 1] = w end
     end
-    return missing
+    return missing, wanted
 end
 
 -- ---------------------------------------------------------------------------
@@ -142,7 +141,9 @@ button:SetPoint("TOP", UIParent, "TOP", 0, -180)
 button:SetFrameStrata("HIGH")
 button:SetClampedToScreen(true)
 button:SetMovable(true)
-button:RegisterForClicks("LeftButtonDown")
+-- fire once, on release, for mouse and key alike (SecureActionButton_OnClick)
+button:SetAttribute("useOnKeyDown", false)
+button:RegisterForClicks("LeftButtonUp")
 button:RegisterForDrag("RightButton")
 button:SetAttribute("type", "macro")
 button:SetAttribute("macrotext", "")
@@ -180,10 +181,23 @@ button:SetScript("OnEnter", function(self)
 end)
 button:SetScript("OnLeave", GameTooltip_Hide)
 
--- After a click the marks are on: hide until the group changes. The macro
--- runs before PostClick, so the attribute still holds what was just marked.
+-- one hidden secure mark button per player (4 party + you)
+local markers = {}
+for i = 1, 5 do
+    local b = CreateFrame("Button", BUTTON .. i, UIParent, "SecureActionButtonTemplate")
+    b:SetAttribute("type", "raidtarget")
+    b:SetAttribute("action", "set")
+    b:SetAttribute("useOnKeyDown", false) -- /click sends a release
+    b:RegisterForClicks("AnyUp")
+    b:Hide()
+    markers[i] = b
+end
+
+-- After a click the marks are on: hide until a new player joins. The key
+-- binding keeps working while hidden and simply sets the marks again.
 local lastMarked = {}
-button:HookScript("PostClick", function()
+button:HookScript("PostClick", function(_, _, down)
+    if down then return end
     for _, m in ipairs(lastMarked) do
         local guid = UnitGUID(m[1])
         if guid and not issecret(guid) then am.applied[guid] = m[2] end
@@ -192,7 +206,6 @@ button:HookScript("PostClick", function()
         am.hideAfterCombat = true
         am.WaitForCombat()
     else
-        button:SetAttribute("macrotext", "")
         button:Hide()
     end
 end)
@@ -220,6 +233,11 @@ function am.WaitForCombat()
 end
 
 local function HideButton()
+    button:Hide()
+end
+
+local function Disarm()
+    lastMarked = {}
     button:SetAttribute("macrotext", "")
     button:Hide()
 end
@@ -232,11 +250,12 @@ function am.Apply(announce)
         events:RegisterEvent("PLAYER_REGEN_ENABLED")
         return false
     end
-    local missing, reason = am.Evaluate()
-    if not missing or #missing == 0 then
-        HideButton()
+    local missing, wanted = am.Evaluate()
+    if not missing or #wanted == 0 then
+        local reason = wanted
+        Disarm()
         if announce then
-            if missing then Say("Everyone already wears their mark.")
+            if missing then Say("Nobody on your list has a mark chosen.")
             elseif reason == "stranger" then Say("Someone in the party is not on your list, no marks.")
             elseif reason == "unknown" then Say("Names are not known yet, try again in a moment.")
             elseif reason == "raid" then Say("Auto Mark only works in a party, not in a raid.")
@@ -245,14 +264,22 @@ function am.Apply(announce)
         end
         return false, reason
     end
+    -- arm every wanted mark ("set" never removes one), so the key always works
     local lines, marks = {}, {}
-    lastMarked = missing
-    for _, m in ipairs(missing) do
-        lines[#lines + 1] = format("/tm [@%s] %d", m[1], m[2])
+    lastMarked = wanted
+    for i, m in ipairs(wanted) do
+        markers[i]:SetAttribute("unit", m[1])
+        markers[i]:SetAttribute("marker", m[2])
+        lines[#lines + 1] = "/click " .. BUTTON .. i
         marks[#marks + 1] = format("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:12|t", m[2])
     end
     button:SetAttribute("macrotext", table.concat(lines, "\n"))
     icons:SetText(table.concat(marks, " "))
+    -- pop up only when someone still needs a mark, or on a manual check
+    if #missing == 0 and not announce then
+        button:Hide()
+        return false, "done"
+    end
     local wasShown = button:IsShown()
     button:Show()
     if not wasShown then
@@ -300,18 +327,17 @@ events:SetScript("OnEvent", function(self, event, arg)
         RestorePosition()
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
         self:RegisterEvent("GROUP_ROSTER_UPDATE")
-        self:RegisterEvent("RAID_TARGET_UPDATE")
     elseif event == "PLAYER_ENTERING_WORLD" then
         Snapshot() -- a reload in a group is not a new invite
+        am.Apply(false) -- arm the key binding again (pops up only if a mark is missing)
     elseif event == "GROUP_ROSTER_UPDATE" then
+        if not IsInGroup() then wipe(am.applied) end -- group gone, marks gone
         if Snapshot() then
             retries = 0
             C_Timer.After(0.5, Check)
-        elseif button:IsShown() or pending then
-            am.Apply(false) -- someone left: units shifted, rebuild or hide
+        else
+            am.Apply(false) -- someone left: units shifted, re-arm or disarm
         end
-    elseif event == "RAID_TARGET_UPDATE" then
-        if button:IsShown() then am.Apply(false) end
     elseif event == "PLAYER_REGEN_ENABLED" then
         self:UnregisterEvent("PLAYER_REGEN_ENABLED")
         if am.hideAfterCombat then
@@ -331,6 +357,6 @@ function am.SetEnabled(on)
         pending = true
         events:RegisterEvent("PLAYER_REGEN_ENABLED")
     elseif not on then
-        HideButton()
+        Disarm()
     end
 end
