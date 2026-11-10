@@ -1,0 +1,1072 @@
+-- Hub.lua: the one window for every module (/mu). Flat dark surfaces,
+-- white-alpha lines and one accent, in the style of EllesmereUI and Naowh
+-- Forever. Fonts come from those addons when installed, else the game font.
+local _, root = ...
+local ACCENT, ACCENT_HEX, Say = root.ACCENT, root.ACCENT_HEX, root.Say
+
+local T = {
+    bg     = { 0.098, 0.106, 0.114 },  -- #191b1d
+    panel  = { 0.118, 0.125, 0.133 },  -- #1e2022
+    line   = { 1, 1, 1, 0.07 },
+    fg     = { 0.94, 0.945, 0.953 },
+    muted  = { 0.60, 0.62, 0.65 },
+    track  = { 0.267, 0.267, 0.267 },
+}
+local WHITE = "Interface\\Buttons\\WHITE8x8"
+local PAD = 28            -- page side padding
+local WINDOW_W, WINDOW_H, SIDEBAR_W = 800, 640, 210
+
+local FONT, MONO = STANDARD_TEXT_FONT, nil
+do
+    local probe = UIParent:CreateFontString()
+    local function try(path)
+        local ok, valid = pcall(probe.SetFont, probe, path, 12, "")
+        return ok and valid ~= false
+    end
+    for _, path in ipairs({ "Interface\\AddOns\\EllesmereUI\\media\\fonts\\Expressway.ttf",
+        "Interface\\AddOns\\NaowhForever\\Core\\Media\\Fonts\\Naowh.ttf" }) do
+        if try(path) then FONT = path; break end
+    end
+    local mono = "Interface\\AddOns\\NaowhForever\\Core\\Media\\Fonts\\JetBrainsMonoNL-Regular.ttf"
+    if try(mono) then MONO = mono end
+end
+
+-- ---------------------------------------------------------------------------
+-- primitives
+
+local function Text(parent, size, color, mono)
+    local fs = parent:CreateFontString(nil, "OVERLAY")
+    fs:SetFont(mono and MONO or FONT, size, "")
+    fs:SetShadowOffset(1, -1)
+    fs:SetShadowColor(0, 0, 0, 0.6)
+    color = color or T.fg
+    fs:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+    fs:SetJustifyH("LEFT")
+    return fs
+end
+
+local function Fill(parent, color, layer)
+    local tex = parent:CreateTexture(nil, layer or "BACKGROUND")
+    tex:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
+    return tex
+end
+
+local function FlatButton(parent, text, width, onClick, primary)
+    local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    b:SetSize(width, 26)
+    b:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
+    local label = Text(b, 12)
+    label:SetPoint("LEFT", 8, 0)
+    label:SetPoint("RIGHT", -8, 0)
+    label:SetJustifyH("CENTER")
+    label:SetWordWrap(false)
+    label:SetText(text)
+    b.label = label
+    local function paint(hover)
+        if primary then
+            b:SetBackdropColor(ACCENT[1], ACCENT[2], ACCENT[3], hover and 0.45 or 0.30)
+            b:SetBackdropBorderColor(ACCENT[1], ACCENT[2], ACCENT[3], hover and 0.9 or 0.6)
+            label:SetTextColor(1, 1, 1, hover and 1 or 0.9)
+        else
+            b:SetBackdropColor(0.089, 0.080, 0.072, hover and 0.75 or 0.6)
+            b:SetBackdropBorderColor(1, 1, 1, hover and 0.45 or 0.25)
+            label:SetTextColor(1, 1, 1, hover and 0.85 or 0.65)
+        end
+    end
+    paint(false)
+    b:SetScript("OnEnter", function() paint(true) end)
+    b:SetScript("OnLeave", function() paint(false) end)
+    if onClick then b:SetScript("OnClick", onClick) end
+    function b:SetLabel(t) label:SetText(t) end
+    return b
+end
+
+local function Toggle(parent, get, set)
+    local t = CreateFrame("Button", nil, parent)
+    t:SetSize(40, 20)
+    local track = Fill(t, T.track, "ARTWORK")
+    track:SetAllPoints()
+    local knob = t:CreateTexture(nil, "OVERLAY")
+    knob:SetColorTexture(1, 1, 1, 1)
+    knob:SetSize(14, 14)
+    local function paint()
+        local on = get() and true or false
+        knob:ClearAllPoints()
+        if on then
+            track:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.8)
+            knob:SetPoint("RIGHT", -3, 0)
+            knob:SetVertexColor(1, 1, 1, 1)
+        else
+            track:SetColorTexture(T.track[1], T.track[2], T.track[3], 0.65)
+            knob:SetPoint("LEFT", 3, 0)
+            knob:SetVertexColor(1, 1, 1, 0.5)
+        end
+    end
+    t:SetScript("OnClick", function()
+        set(not get())
+        paint()
+    end)
+    t.Refresh = paint
+    return t
+end
+
+-- flat slider: white-alpha track, accent fill up to a white thumb
+local function FlatSlider(parent, width, min, max, step, get, set, format)
+    local s = CreateFrame("Slider", nil, parent)
+    s:SetOrientation("HORIZONTAL")
+    s:SetSize(width, 16)
+    s:SetMinMaxValues(min, max)
+    s:SetValueStep(step)
+    s:SetObeyStepOnDrag(true)
+    s:EnableMouseWheel(true)
+    local track = Fill(s, { 1, 1, 1, 0.16 }, "BACKGROUND")
+    track:SetPoint("LEFT")
+    track:SetPoint("RIGHT")
+    track:SetHeight(4)
+    s:SetThumbTexture(WHITE)
+    local thumb = s:GetThumbTexture()
+    thumb:SetSize(8, 16)
+    thumb:SetVertexColor(1, 1, 1, 1)
+    local fill = Fill(s, { ACCENT[1], ACCENT[2], ACCENT[3], 0.75 }, "ARTWORK")
+    fill:SetPoint("LEFT", track, "LEFT")
+    fill:SetPoint("RIGHT", thumb, "CENTER")
+    fill:SetHeight(4)
+    local value = Text(parent, 12, ACCENT)
+    value:SetPoint("LEFT", s, "RIGHT", 10, 0)
+    value:SetWidth(56)
+    local refreshing = false
+    local function show(v) value:SetText(format(v)) end
+    s:SetScript("OnValueChanged", function(_, v)
+        v = math.floor(v / step + 0.5) * step
+        show(v)
+        if not refreshing then set(v) end
+    end)
+    s:SetScript("OnMouseWheel", function(self, delta)
+        self:SetValue(math.max(min, math.min(max, self:GetValue() + delta * step)))
+    end)
+    s.Refresh = function()
+        refreshing = true
+        s:SetValue(get())
+        show(get())
+        refreshing = false
+    end
+    return s
+end
+
+-- button that shows the current choice and opens a menu of all choices
+local function MenuButton(parent, width, choices, get, set)
+    local b = FlatButton(parent, "", width)
+    b.label:SetJustifyH("LEFT")
+    local arrow = Text(b, 10, T.muted)
+    arrow:SetPoint("RIGHT", -8, 0)
+    arrow:SetText("v")
+    local function list() return type(choices) == "function" and choices() or choices end
+    local function refresh()
+        for _, c in ipairs(list()) do
+            if c.value == get() then b:SetLabel(c.text); return end
+        end
+        b:SetLabel(tostring(get() or "-"))
+    end
+    b:SetScript("OnClick", function(self)
+        if MenuUtil and MenuUtil.CreateContextMenu then
+            MenuUtil.CreateContextMenu(self, function(_, menu)
+                menu:SetScrollMode(320)
+                for _, c in ipairs(list()) do
+                    menu:CreateRadio(c.text, function() return get() == c.value end, function()
+                        set(c.value)
+                        refresh()
+                    end)
+                end
+            end)
+        else
+            local items, nextValue = list(), nil
+            for i, c in ipairs(items) do
+                if c.value == get() then nextValue = items[i % #items + 1].value end
+            end
+            set(nextValue == nil and items[1].value or nextValue)
+            refresh()
+        end
+    end)
+    b.Refresh = refresh
+    return b
+end
+
+local function Swatch(parent, get, set)
+    local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    b:SetSize(22, 22)
+    b:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
+    b:SetBackdropBorderColor(1, 1, 1, 0.3)
+    local function refresh()
+        local r, g, bl = get()
+        b:SetBackdropColor(r, g, bl, 1)
+    end
+    b:SetScript("OnClick", function()
+        local r, g, bl = get()
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = r, g = g, b = bl,
+            swatchFunc = function() set(ColorPickerFrame:GetColorRGB()); refresh() end,
+            cancelFunc = function(prev) set(prev.r, prev.g, prev.b); refresh() end,
+        })
+    end)
+    b.Refresh = refresh
+    return b
+end
+
+local function Input(parent, width, placeholder, onEnter, onChange)
+    local e = CreateFrame("EditBox", nil, parent, "BackdropTemplate")
+    e:SetSize(width, 26)
+    e:SetAutoFocus(false)
+    e:SetFont(FONT, 13, "")
+    e:SetTextColor(T.fg[1], T.fg[2], T.fg[3])
+    e:SetTextInsets(8, 8, 0, 0)
+    e:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
+    e:SetBackdropColor(0.03, 0.023, 0.018, 0.5)
+    e:SetBackdropBorderColor(1, 1, 1, 0.15)
+    local hint = Text(e, 12, { 1, 1, 1, 0.3 })
+    hint:SetPoint("LEFT", 8, 0)
+    hint:SetText(placeholder)
+    e:SetScript("OnTextChanged", function(self)
+        hint:SetShown(self:GetText() == "")
+        if onChange then onChange(self:GetText()) end
+    end)
+    e:SetScript("OnEditFocusGained", function(self) self:SetBackdropBorderColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.7) end)
+    e:SetScript("OnEditFocusLost", function(self) self:SetBackdropBorderColor(1, 1, 1, 0.15) end)
+    e:SetScript("OnEscapePressed", e.ClearFocus)
+    e:SetScript("OnEnterPressed", function(self) if onEnter then onEnter(self:GetText()) end end)
+    return e
+end
+
+-- ---------------------------------------------------------------------------
+-- page: fixed title block, scrolling body with a cursor for rows
+
+local function NewPage(parent, title, subtitle)
+    local page = CreateFrame("Frame", nil, parent)
+    page:SetAllPoints()
+    page:Hide()
+    page.refreshers = {}
+    page.rows = 0
+    local head = Text(page, 22)
+    head:SetPoint("TOPLEFT", PAD, -22)
+    head:SetText(title)
+    local sub = Text(page, 12, T.muted)
+    sub:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -6)
+    sub:SetPoint("RIGHT", page, "RIGHT", -PAD - 30, 0)
+    sub:SetText(subtitle or "")
+    local div = Fill(page, T.line, "ARTWORK")
+    div:SetPoint("TOPLEFT", PAD, -76)
+    div:SetPoint("TOPRIGHT", -PAD, -76)
+    div:SetHeight(1)
+
+    local scroll = CreateFrame("ScrollFrame", nil, page)
+    scroll:SetPoint("TOPLEFT", 0, -78)
+    scroll:SetPoint("BOTTOMRIGHT", 0, 6)
+    local body = CreateFrame("Frame", nil, scroll)
+    body:SetSize(WINDOW_W - SIDEBAR_W - 2, 10)
+    scroll:SetScrollChild(body)
+    page.body, page.scroll = body, scroll
+    page.y = -12
+
+    local bar = Fill(page, { 1, 1, 1, 0.18 }, "ARTWORK")
+    bar:SetWidth(3)
+    bar:Hide()
+    local function updateBar()
+        local view, full = scroll:GetHeight(), body:GetHeight()
+        if full <= view + 1 then bar:Hide(); return end
+        local h = math.max(24, view * view / full)
+        local offset = scroll:GetVerticalScroll() / (full - view) * (view - h)
+        bar:SetHeight(h)
+        bar:ClearAllPoints()
+        bar:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", -8, -offset)
+        bar:Show()
+    end
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        local maxScroll = math.max(0, body:GetHeight() - self:GetHeight())
+        self:SetVerticalScroll(math.max(0, math.min(maxScroll, self:GetVerticalScroll() - delta * 48)))
+        updateBar()
+    end)
+    function page:Finish()
+        body:SetHeight(-self.y + 16)
+        updateBar()
+    end
+    page:SetScript("OnShow", function(self)
+        for _, refresh in ipairs(self.refreshers) do refresh() end
+        updateBar()
+    end)
+    function page:Refresh()
+        for _, refresh in ipairs(self.refreshers) do refresh() end
+    end
+    return page
+end
+
+local function Section(page, text)
+    if page.y < -12 then page.y = page.y - 14 end
+    local fs = Text(page.body, 11, { 1, 1, 1, 0.45 })
+    fs:SetPoint("TOPLEFT", PAD + 2, page.y)
+    fs:SetText(text:upper())
+    page.y = page.y - 20
+    page.rows = 0
+    return fs
+end
+
+local function Row(page, label, desc, height)
+    local row = CreateFrame("Frame", nil, page.body)
+    row:SetPoint("TOPLEFT", PAD, page.y)
+    row:SetPoint("TOPRIGHT", -PAD, page.y)
+    row:SetHeight(height or (desc and 44 or 34))
+    page.rows = page.rows + 1
+    Fill(row, { 0, 0, 0, page.rows % 2 == 1 and 0.12 or 0.22 }):SetAllPoints()
+    local name = Text(row, 13)
+    if desc then
+        name:SetPoint("TOPLEFT", 12, -8)
+        local d = Text(row, 11, T.muted)
+        d:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -4)
+        d:SetPoint("RIGHT", row, "RIGHT", -200, 0)
+        d:SetWordWrap(false)
+        d:SetText(desc)
+        row.desc = d
+    else
+        name:SetPoint("LEFT", 12, 0)
+    end
+    name:SetText(label or "")
+    row.name = name
+    page.y = page.y - row:GetHeight() - 2
+    return row
+end
+
+local function Control(page, row, widget, x)
+    widget:SetPoint("RIGHT", row, "RIGHT", x or -12, 0)
+    if row.desc and not row.descFitted then
+        row.descFitted = true
+        row.desc:SetPoint("RIGHT", widget, "LEFT", -12, 0)
+    end
+    if widget.Refresh then page.refreshers[#page.refreshers + 1] = widget.Refresh end
+    return widget
+end
+
+local function ToggleRow(page, label, desc, get, set)
+    local row = Row(page, label, desc)
+    Control(page, row, Toggle(row, get, set))
+    return row
+end
+
+local function ButtonRow(page, label, desc, text, onClick, primary)
+    local row = Row(page, label, desc)
+    row.button = Control(page, row, FlatButton(row, text, 130, onClick, primary))
+    return row
+end
+
+local function SliderRow(page, label, desc, min, max, step, get, set, format)
+    local row = Row(page, label, desc)
+    Control(page, row, FlatSlider(row, 170, min, max, step, get, set, format), -78)
+    return row
+end
+
+local function MenuRow(page, label, desc, choices, get, set)
+    local row = Row(page, label, desc)
+    Control(page, row, MenuButton(row, 220, choices, get, set))
+    return row
+end
+
+-- two-column grid of small cells (toggles, swatches)
+local function Grid(page, count, build)
+    local half = math.ceil(count / 2)
+    local width = (WINDOW_W - SIDEBAR_W - 2 - 2 * PAD - 4) / 2
+    for i = 1, count do
+        local column = i <= half and 0 or 1
+        local line = column == 0 and i or i - half
+        local cell = CreateFrame("Frame", nil, page.body)
+        cell:SetSize(width, 32)
+        cell:SetPoint("TOPLEFT", PAD + column * (width + 4), page.y - (line - 1) * 34)
+        Fill(cell, { 0, 0, 0, line % 2 == 1 and 0.12 or 0.22 }):SetAllPoints()
+        build(cell, i)
+    end
+    page.y = page.y - half * 34
+end
+
+local function Note(page, text)
+    local fs = Text(page.body, 11, T.muted)
+    fs:SetPoint("TOPLEFT", PAD + 2, page.y - 8)
+    fs:SetPoint("RIGHT", page.body, "RIGHT", -PAD, 0)
+    fs:SetText(text)
+    page.y = page.y - 44
+    return fs
+end
+
+local function ButtonBar(page, buttons)
+    page.y = page.y - 12
+    local last
+    for _, spec in ipairs(buttons) do
+        local b = FlatButton(page.body, spec[1], spec[2], spec[3], spec[4])
+        if last then b:SetPoint("LEFT", last, "RIGHT", 8, 0) else b:SetPoint("TOPLEFT", PAD, page.y) end
+        last = b
+        spec.button = b
+    end
+    page.y = page.y - 34
+end
+
+-- ---------------------------------------------------------------------------
+-- combat text: general
+
+local BUILTIN_FONTS = {
+    { value = false, text = "Addon default" },
+    { value = "Interface\\AddOns\\NaowhUI_Media\\Shared\\Fonts\\GothamNarrowUltra.ttf", text = "Gotham Narrow Ultra" },
+    { value = "Fonts\\FRIZQT__.TTF", text = "Friz Quadrata" },
+    { value = "Fonts\\ARIALN.TTF", text = "Arial Narrow" },
+    { value = "Fonts\\skurri.ttf", text = "Skurri" },
+    { value = "Fonts\\MORPHEUS.ttf", text = "Morpheus" },
+}
+
+local function FontChoices()
+    local list, seen = {}, {}
+    for _, f in ipairs(BUILTIN_FONTS) do
+        list[#list + 1] = f
+        if f.value then seen[f.value:lower()] = true end
+    end
+    local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+    if LSM then
+        local names = LSM:List("font")
+        for _, name in ipairs(names) do
+            local path = LSM:Fetch("font", name, true)
+            if type(path) == "string" and not seen[path:lower()] then
+                list[#list + 1] = { value = path, text = name }
+                seen[path:lower()] = true
+            end
+        end
+    end
+    return list
+end
+
+local OUTLINES = {
+    { value = "default", text = "Game default" },
+    { value = "NONE", text = "None" },
+    { value = "OUTLINE", text = "Outline" },
+    { value = "THICKOUTLINE", text = "Thick outline" },
+}
+
+local DIRS = { "up", "down", "left", "right" }
+local DIR_TEXT = { up = "Up", down = "Down", left = "Left", right = "Right" }
+
+local function PositionRow(page, ct, name, label)
+    local row = Row(page, label, "Steps of 10 px, Shift: 1 px.")
+    local function step(dx, dy)
+        local n = IsShiftKeyDown() and 1 or 10
+        ct.MoveStream(name, dx * n, dy * n)
+        ct.Sample(name)
+        page:Refresh()
+    end
+    local yPlus = FlatButton(row, "+", 24, function() step(0, 1) end)
+    yPlus:SetPoint("RIGHT", -12, 0)
+    local yVal = Text(row, 12, ACCENT)
+    yVal:SetWidth(44)
+    yVal:SetJustifyH("CENTER")
+    yVal:SetPoint("RIGHT", yPlus, "LEFT", -2, 0)
+    local yMinus = FlatButton(row, "-", 24, function() step(0, -1) end)
+    yMinus:SetPoint("RIGHT", yVal, "LEFT", -2, 0)
+    local yLabel = Text(row, 11, T.muted)
+    yLabel:SetPoint("RIGHT", yMinus, "LEFT", -4, 0)
+    yLabel:SetText("Y")
+    local xPlus = FlatButton(row, "+", 24, function() step(1, 0) end)
+    xPlus:SetPoint("RIGHT", yLabel, "LEFT", -10, 0)
+    local xVal = Text(row, 12, ACCENT)
+    xVal:SetWidth(44)
+    xVal:SetJustifyH("CENTER")
+    xVal:SetPoint("RIGHT", xPlus, "LEFT", -2, 0)
+    local xMinus = FlatButton(row, "-", 24, function() step(-1, 0) end)
+    xMinus:SetPoint("RIGHT", xVal, "LEFT", -2, 0)
+    local xLabel = Text(row, 11, T.muted)
+    xLabel:SetPoint("RIGHT", xMinus, "LEFT", -4, 0)
+    xLabel:SetText("X")
+    local dir
+    dir = FlatButton(row, "", 62, function()
+        local current, nextDir = ct.streams[name].direction, DIRS[1]
+        for i, d in ipairs(DIRS) do
+            if d == current then nextDir = DIRS[i % #DIRS + 1] end
+        end
+        ct.SetDirection(name, nextDir)
+        ct.Sample(name)
+        dir:SetLabel(DIR_TEXT[nextDir])
+    end)
+    dir:SetPoint("RIGHT", xLabel, "LEFT", -10, 0)
+    row.desc:SetPoint("RIGHT", dir, "LEFT", -8, 0)
+    page.refreshers[#page.refreshers + 1] = function()
+        local x, y = ct.StreamPosition(name)
+        xVal:SetText(x)
+        yVal:SetText(y)
+        dir:SetLabel(DIR_TEXT[ct.streams[name].direction] or "Up")
+    end
+end
+
+local function BuildTextPage(page)
+    local ct = root.CombatText
+    local function o() return ct.Options() end
+    local function apply() ct.ApplySettings() end
+    local L = ct.LIMITS
+
+    Section(page, "Scroll areas")
+    ToggleRow(page, "Damage taken & debuffs", "Left box.",
+        function() return not o().streamOff.incoming end,
+        function(v) o().streamOff.incoming = not v or nil end)
+    ToggleRow(page, "Heals, buffs & gains", "Right box.",
+        function() return not o().streamOff.gains end,
+        function(v) o().streamOff.gains = not v or nil end)
+    PositionRow(page, ct, "incoming", "Damage taken box")
+    PositionRow(page, ct, "gains", "Heals & buffs box")
+
+    Section(page, "Text")
+    MenuRow(page, "Font", nil, FontChoices,
+        function() return o().font end, function(v) o().font = v; apply(); ct.Sample("incoming") end)
+    MenuRow(page, "Outline", nil, OUTLINES,
+        function() return o().outline end, function(v) o().outline = v; apply(); ct.Sample("incoming") end)
+    SliderRow(page, "Text size", nil, L.scale[1], L.scale[2], 0.05,
+        function() return o().scale end, function(v) o().scale = v; apply() end,
+        function(v) return string.format("%d%%", v * 100 + 0.5) end)
+    SliderRow(page, "Display time", nil, L.lifetime[1], L.lifetime[2], 0.1,
+        function() return o().lifetime end, function(v) o().lifetime = v; apply() end,
+        function(v) return string.format("%.1f s", v) end)
+    SliderRow(page, "Scroll distance", nil, L.distance[1], L.distance[2], 10,
+        function() return o().distance end, function(v) o().distance = v; apply() end,
+        function(v) return string.format("%d px", v) end)
+    SliderRow(page, "Merge repeats within", "Same hit twice in this window: one line, x2.", L.window[1], L.window[2], 0.05,
+        function() return o().window end, function(v) o().window = v; apply() end,
+        function(v) return v < 0.01 and "off" or string.format("%.2f s", v) end)
+
+    Section(page, "Extras")
+    ToggleRow(page, "Spell school colors", "Fire orange, frost blue, ... (colors on the Events page).",
+        function() return o().schoolColors end, function(v) o().schoolColors = v; apply() end)
+    ToggleRow(page, "Icons", "School icon on damage and heals, aura icon on buffs and debuffs.",
+        function() return o().schoolIcons end, function(v) o().schoolIcons = v; apply() end)
+    ToggleRow(page, "Crits pop larger", nil,
+        function() return o().critPop end, function(v) o().critPop = v; apply() end)
+    ToggleRow(page, "Same font for your damage", "Blizzard's numbers over enemies. Takes effect after a logout.",
+        function() return o().worldFont end, function(v) o().worldFont = v end)
+    ToggleRow(page, "Blizzard's own text too", "Shows Blizzard's incoming numbers as well (doubles them).",
+        function() return o().blizzSelf end,
+        function(v) if v ~= o().blizzSelf then ct.ToggleBlizzard() end end)
+
+    local bar = {
+        { "Move boxes", 120, nil, true },
+        { "Preview", 90, function() ct.Preview() end },
+        { "Reset positions", 120, function() ct.ResetPositions(); page:Refresh() end },
+        { "Reset settings", 120, function()
+            KPCombatTextDB.options = nil
+            apply()
+            page:Refresh()
+        end },
+    }
+    bar[1][3] = function() bar[1].button:SetLabel(ct.SetAnchorsShown(nil) and "Lock boxes" or "Move boxes") end
+    ButtonBar(page, bar)
+    page:HookScript("OnHide", function()
+        ct.SetAnchorsShown(nil, false)
+        bar[1].button:SetLabel("Move boxes")
+    end)
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
+-- combat text: events & colors
+
+local function BuildEventsPage(page)
+    local ct = root.CombatText
+    local function o() return ct.Options() end
+
+    Section(page, "Show")
+    local items = {}
+    for _, c in ipairs(ct.CATEGORIES) do items[#items + 1] = c end
+    items[#items + 1] = { key = "__fades", label = "Buff / debuff fades" }
+    Grid(page, #items, function(cell, i)
+        local item = items[i]
+        local label = Text(cell, 12)
+        label:SetPoint("LEFT", 10, 0)
+        label:SetPoint("RIGHT", -56, 0)
+        label:SetWordWrap(false)
+        label:SetText(item.label)
+        local get, set
+        if item.key == "__fades" then
+            get = function() return o().fades end
+            set = function(v) o().fades = v end
+        else
+            get = function() return o().show[item.key] ~= false end
+            set = function(v)
+                if v then o().show[item.key] = nil else o().show[item.key] = false end
+            end
+        end
+        local t = Toggle(cell, get, set)
+        t:SetPoint("RIGHT", -8, 0)
+        page.refreshers[#page.refreshers + 1] = t.Refresh
+    end)
+
+    Section(page, "Colors")
+    local slots = ct.COLOR_SLOTS
+    Grid(page, #slots, function(cell, i)
+        local slot = slots[i]
+        local label = Text(cell, 12)
+        label:SetPoint("LEFT", 10, 0)
+        label:SetText(slot.label)
+        local function get()
+            local c = ct.Color(o(), slot.key)
+            return c[1], c[2], c[3]
+        end
+        local sw = Swatch(cell, get, function(r, g, b)
+            o().colors[slot.key] = { r, g, b }
+            ct.ApplySettings()
+            local c = ct.Color(o(), slot.key)
+            label:SetTextColor(c[1], c[2], c[3])
+        end)
+        sw:SetPoint("RIGHT", -10, 0)
+        page.refreshers[#page.refreshers + 1] = function()
+            sw.Refresh()
+            local r, g, b = get()
+            label:SetTextColor(r, g, b)
+        end
+    end)
+    ButtonBar(page, {
+        { "Reset colors", 120, function()
+            o().colors = {}
+            ct.ApplySettings()
+            page:Refresh()
+        end },
+        { "Show all events", 130, function()
+            o().show, o().fades = {}, true
+            page:Refresh()
+        end },
+    })
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
+-- flagged players: the list
+
+StaticPopupDialogs["MIROGA_CLEAR_FLAGS"] = {
+    text = "Remove ALL flagged players from the list?",
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function() root.FlagPlates.ClearAll() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+local function BuildPlayersPage(page)
+    local fp = root.FlagPlates
+    local filter = ""
+
+    Section(page, "Add a player")
+    local addRow = Row(page, "", nil, 40)
+    local input
+    local function add(text)
+        local first, last = fp.ParseName(text)
+        if not first then return end
+        if fp.Add(first, last) then
+            input:SetText("")
+        else
+            fp.Print("Already on the list.")
+        end
+        input:ClearFocus()
+    end
+    input = Input(addRow, 220, "Name or Name Surname", add)
+    input:SetPoint("LEFT", 8, 0)
+    local addButton = FlatButton(addRow, "Add", 70, function() add(input:GetText()) end, true)
+    addButton:SetPoint("LEFT", input, "RIGHT", 6, 0)
+    local targetButton = FlatButton(addRow, "Flag / unflag target", 150, function() fp.ToggleTarget() end)
+    targetButton:SetPoint("RIGHT", -8, 0)
+    Note(page, "A first name alone matches every surname. Right-click any player for |cff" .. ACCENT_HEX .. "Flag player|r.")
+    page.y = page.y + 12
+
+    local header = Section(page, "On your list")
+    local searchRow = Row(page, "", nil, 40)
+    local search = Input(searchRow, 220, "Search", nil, function(text)
+        filter = text
+        if page.RefreshList then page.RefreshList() end
+    end)
+    search:SetPoint("LEFT", 8, 0)
+    local clear = FlatButton(searchRow, "Remove all", 110, function() StaticPopup_Show("MIROGA_CLEAR_FLAGS") end)
+    clear:SetPoint("RIGHT", -8, 0)
+
+    local listTop = page.y
+    local rows = {}
+    local empty = Text(page.body, 12, T.muted)
+    empty:SetPoint("TOPLEFT", PAD + 12, listTop - 10)
+    empty:SetText("Nobody yet.")
+
+    local function GetRow(i)
+        if rows[i] then return rows[i] end
+        local row = CreateFrame("Frame", nil, page.body)
+        row:SetHeight(30)
+        Fill(row, { 0, 0, 0, i % 2 == 1 and 0.12 or 0.22 }):SetAllPoints()
+        row.name = Text(row, 13)
+        row.name:SetPoint("LEFT", 12, 0)
+        row.del = FlatButton(row, "X", 26, function()
+            if row.key then fp.Remove(row.key) end
+        end)
+        row.del:SetHeight(22)
+        row.del:SetPoint("RIGHT", -8, 0)
+        row.stats = Text(row, 11, T.muted)
+        row.stats:SetPoint("RIGHT", row.del, "LEFT", -10, 0)
+        row.stats:SetJustifyH("RIGHT")
+        row.name:SetPoint("RIGHT", row.stats, "LEFT", -10, 0)
+        row.name:SetWordWrap(false)
+        rows[i] = row
+        return row
+    end
+
+    function page.RefreshList()
+        if not fp.db then return end
+        local keys = fp.SortedKeys(filter)
+        header:SetText(string.format("ON YOUR LIST  |cff%s%d|r", ACCENT_HEX, fp.Count()))
+        for i, k in ipairs(keys) do
+            local e = fp.db.entries[k]
+            local row = GetRow(i)
+            row.key = k
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", PAD, listTop - (i - 1) * 32)
+            row:SetPoint("TOPRIGHT", -PAD, listTop - (i - 1) * 32)
+            if e.last then
+                row.name:SetText(e.first .. " |cffaaaaaa" .. e.last .. "|r")
+            else
+                row.name:SetText(e.first .. " |cff777777(any surname)|r")
+            end
+            row.stats:SetText(fp.StatsText and fp.StatsText(e) or "")
+            row:Show()
+        end
+        for i = #keys + 1, #rows do
+            rows[i].key = nil
+            rows[i]:Hide()
+        end
+        empty:SetShown(#keys == 0)
+        page.y = listTop - math.max(1, #keys) * 32
+        page:Finish()
+    end
+    page.refreshers[#page.refreshers + 1] = page.RefreshList
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
+-- flagged players: plates, alerts, statistics
+
+local function BuildAlertsPage(page)
+    local fp = root.FlagPlates
+    local function db() return fp.db or {} end
+    local function repaint() if fp.RepaintAll then fp.RepaintAll() end end
+
+    Section(page, "Nameplates")
+    local colorRow = Row(page, "Flag color")
+    local swatch = Swatch(colorRow, function()
+        local c = db().color or fp.DEFAULTS.color
+        return c.r, c.g, c.b
+    end, function(r, g, b)
+        local c = db().color
+        c.r, c.g, c.b = r, g, b
+        repaint()
+    end)
+    Control(page, colorRow, swatch, -100)
+    Control(page, colorRow, FlatButton(colorRow, "Default", 76, function()
+        local c, d = db().color, fp.DEFAULTS.color
+        c.r, c.g, c.b = d.r, d.g, d.b
+        repaint()
+        swatch.Refresh()
+    end))
+    ToggleRow(page, "Color the health bar", nil,
+        function() return db().colorBar end, function(v) db().colorBar = v; repaint() end)
+    ToggleRow(page, "Color the name", nil,
+        function() return db().colorName end, function(v) db().colorName = v; repaint() end)
+
+    Section(page, "When one shows up")
+    ToggleRow(page, "Chat message", "Name plus how often you met, killed and were killed by them.",
+        function() return db().alert end, function(v) db().alert = v end)
+    local soundChoices = {}
+    for _, s in ipairs(fp.SOUNDS or {}) do soundChoices[#soundChoices + 1] = { value = s.key, text = s.label } end
+    MenuRow(page, "Sound", "Plays when a flagged player shows up. Several at once give one sound.", soundChoices,
+        function() return db().sound end,
+        function(v) db().sound = v; fp.PlayAlertSound(v) end)
+    MenuRow(page, "Alert again", "When the same player comes back into view after 30 s out of sight.", {
+        { value = 0, text = "Never (once per encounter)" },
+        { value = 60, text = "After 1 min" },
+        { value = 120, text = "After 2 min" },
+        { value = 300, text = "After 5 min" },
+    }, function() return db().repeatGap end, function(v) db().repeatGap = v end)
+
+    Section(page, "Statistics")
+    ToggleRow(page, "Show in tooltip", "Flagged + met / killed / deaths under the player's name.",
+        function() return db().tooltip end, function(v) db().tooltip = v end)
+    ButtonRow(page, "Clear statistics", "Resets the counters of every player. The list stays.", "Clear",
+        function() fp.ConfirmPurgeStats() end)
+    Note(page, "Kills count from honor kill messages and from your flagged target dying while you fight. Deaths come from the death recap or a flagged player who had you targeted.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
+-- powershift
+
+local SHIFT_KEYS = {
+    { "Cat Form", "CLICK MirogaShiftCat:LeftButton" },
+    { "Bear Form", "CLICK MirogaShiftBear:LeftButton" },
+    { "Travel / Aquatic Form", "CLICK MirogaShiftTravel:LeftButton", "Aquatic while swimming." },
+}
+
+local function BuildShiftPage(page)
+    local _, class = UnitClass("player")
+    if class ~= "DRUID" then
+        Note(page, "Powershift is for druids only.")
+        page:Finish()
+        return
+    end
+    Section(page, "Keys")
+    for _, key in ipairs(SHIFT_KEYS) do
+        local row = Row(page, key[1], key[3])
+        local bound = Text(row, 13, ACCENT, MONO ~= nil)
+        bound:SetPoint("RIGHT", -14, 0)
+        bound:SetJustifyH("RIGHT")
+        page.refreshers[#page.refreshers + 1] = function()
+            local k1, k2 = GetBindingKey(key[2])
+            if k1 then
+                bound:SetText(GetBindingText(k1) .. (k2 and ("|cff888888 / |r" .. GetBindingText(k2)) or ""))
+            else
+                bound:SetText("|cff888888not bound|r")
+            end
+        end
+    end
+    ButtonBar(page, { { "Set keys", 120, function()
+        local ok = Settings and Settings.KEYBINDINGS_CATEGORY_ID
+            and pcall(Settings.OpenToCategory, Settings.KEYBINDINGS_CATEGORY_ID)
+        if not ok then Say("Game Menu > Options > Keybindings > AddOns.") end
+    end, true } })
+    Note(page, "Key down cancels your form, key up casts the new one, so the main bar never sticks on page 1. Works in combat. Keybindings > AddOns.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
+-- commands
+
+local COMMANDS = {
+    { "/mu", "open this window" },
+    { "/mu t", "flag / unflag your target" },
+    { "/mu f", "flagged players list" },
+    { "/mu f add Name", "flag by name (del, list too)" },
+    { "/mu f purge", "clear met / killed / deaths" },
+    { "/mu a", "plates, alerts & statistics" },
+    { "/mu c", "combat text settings" },
+    { "/mu e", "combat text events & colors" },
+    { "/mu m", "move combat text boxes (again = lock)" },
+    { "/mu p", "combat text preview" },
+    { "/mu b", "Blizzard's own combat text on / off" },
+    { "/mu s", "powershift keys" },
+}
+
+local function BuildHelpPage(page)
+    Section(page, "Slash commands")
+    for _, c in ipairs(COMMANDS) do
+        local row = Row(page, c[2], nil, 28)
+        row.name:ClearAllPoints()
+        row.name:SetPoint("LEFT", 180, 0)
+        local cmd = Text(row, 12, ACCENT, MONO ~= nil)
+        cmd:SetPoint("LEFT", 12, 0)
+        cmd:SetText(c[1])
+    end
+    Note(page, "The old long forms (/mu target, /mu flag, /mu text) still work. Every setting is account-wide.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
+-- hub window
+
+local TABS = {
+    { group = "COMBAT TEXT" },
+    { key = "text", label = "Settings", sub = "Damage, heals, buffs and debuffs on you: boxes, font, timing.",
+        icon = "Interface\\Icons\\Spell_Fire_FlameBolt", module = "CombatText", build = BuildTextPage },
+    { key = "events", label = "Events & Colors", sub = "What shows up, and in which color.",
+        icon = "Interface\\Icons\\INV_Misc_Gem_Variety_01", module = "CombatText", build = BuildEventsPage },
+    { group = "FLAGGED PLAYERS" },
+    { key = "players", label = "Players", sub = "Everyone on this list gets marked nameplates, alerts and statistics.",
+        icon = "Interface\\Icons\\Ability_Hunter_SniperShot", module = "FlagPlates", build = BuildPlayersPage },
+    { key = "alerts", label = "Plates & Alerts", sub = "Plate color, sound, chat message and statistics.",
+        icon = "Interface\\Icons\\Spell_Holy_SealOfWisdom", module = "FlagPlates", build = BuildAlertsPage },
+    { group = "DRUID" },
+    { key = "shift", label = "Powershift", sub = "Form to form in one key press, without the action bar bug.",
+        icon = "Interface\\Icons\\Ability_Druid_CatForm", build = BuildShiftPage },
+    { group = "HELP" },
+    { key = "help", label = "Commands", sub = "Everything is one letter after /mu.",
+        icon = "Interface\\Icons\\INV_Misc_Note_01", build = BuildHelpPage },
+}
+
+local hub, current
+local tabButtons, pages = {}, {}
+
+local function SelectTab(key)
+    if not pages[key] then key = "text" end
+    current = key
+    for _, tab in ipairs(TABS) do
+        if tab.key then
+            local b, on = tabButtons[tab.key], tab.key == key
+            b.marker:SetShown(on)
+            b.fill:SetShown(on)
+            b.label:SetTextColor(1, 1, 1, on and 1 or 0.6)
+            b.icon:SetAlpha(on and 1 or 0.6)
+            pages[tab.key]:SetShown(on)
+        end
+    end
+end
+
+local function BuildHub()
+    local f = CreateFrame("Frame", "MirogaUtilitiesPanel", UIParent, "BackdropTemplate")
+    f:SetSize(WINDOW_W, WINDOW_H)
+    f:SetPoint("CENTER")
+    f:SetFrameStrata("DIALOG")
+    f:SetToplevel(true)
+    f:SetClampedToScreen(true)
+    f:SetMovable(true)
+    f:EnableMouse(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
+    f:SetBackdropColor(T.bg[1], T.bg[2], T.bg[3], 0.97)
+    f:SetBackdropBorderColor(0, 0, 0, 1)
+    tinsert(UISpecialFrames, "MirogaUtilitiesPanel")
+
+    local side = CreateFrame("Frame", nil, f)
+    side:SetPoint("TOPLEFT", 1, -1)
+    side:SetPoint("BOTTOMLEFT", 1, 1)
+    side:SetWidth(SIDEBAR_W)
+    Fill(side, T.panel):SetAllPoints()
+    local sideLine = Fill(side, T.line, "ARTWORK")
+    sideLine:SetPoint("TOPRIGHT")
+    sideLine:SetPoint("BOTTOMRIGHT")
+    sideLine:SetWidth(1)
+
+    local logo = side:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(30, 30)
+    logo:SetPoint("TOPLEFT", 18, -18)
+    logo:SetTexture("Interface\\Icons\\Ability_Druid_CatForm")
+    logo:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    local brand = Text(side, 16)
+    brand:SetPoint("TOPLEFT", logo, "TOPRIGHT", 10, -1)
+    brand:SetText("|cff" .. ACCENT_HEX .. "Miroga|r Utilities")
+    local version = Text(side, 10, T.muted)
+    version:SetPoint("TOPLEFT", brand, "BOTTOMLEFT", 0, -3)
+    version:SetText("v" .. (C_AddOns.GetAddOnMetadata("MirogaUtilities", "Version") or "?"))
+    local brandLine = Fill(side, T.line, "ARTWORK")
+    brandLine:SetPoint("TOPLEFT", 0, -66)
+    brandLine:SetPoint("TOPRIGHT", -1, -66)
+    brandLine:SetHeight(1)
+
+    local content = CreateFrame("Frame", nil, f)
+    content:SetPoint("TOPLEFT", side, "TOPRIGHT")
+    content:SetPoint("BOTTOMRIGHT", -1, 1)
+
+    local close = CreateFrame("Button", nil, f)
+    close:SetSize(28, 28)
+    close:SetPoint("TOPRIGHT", -10, -10)
+    close:SetFrameLevel(f:GetFrameLevel() + 20)
+    local x = Text(close, 16, { 1, 1, 1, 0.5 })
+    x:SetPoint("CENTER")
+    x:SetText("X")
+    close:SetScript("OnEnter", function() x:SetTextColor(1, 1, 1, 1) end)
+    close:SetScript("OnLeave", function() x:SetTextColor(1, 1, 1, 0.5) end)
+    close:SetScript("OnClick", function() f:Hide() end)
+
+    local y = -78
+    for _, tab in ipairs(TABS) do
+        if tab.group then
+            if y < -78 then y = y - 10 end
+            local g = Text(side, 11, { 1, 1, 1, 0.4 })
+            g:SetPoint("TOPLEFT", 20, y)
+            g:SetText(tab.group)
+            y = y - 20
+        else
+            local b = CreateFrame("Button", nil, side)
+            b:SetPoint("TOPLEFT", 8, y)
+            b:SetPoint("TOPRIGHT", -9, y)
+            b:SetHeight(30)
+            y = y - 32
+            b.fill = Fill(b, { ACCENT[1], ACCENT[2], ACCENT[3], 0.16 })
+            b.fill:SetAllPoints()
+            b.marker = Fill(b, { ACCENT[1], ACCENT[2], ACCENT[3], 1 }, "ARTWORK")
+            b.marker:SetPoint("TOPLEFT")
+            b.marker:SetPoint("BOTTOMLEFT")
+            b.marker:SetWidth(3)
+            local hl = b:CreateTexture(nil, "HIGHLIGHT")
+            hl:SetAllPoints()
+            hl:SetColorTexture(1, 1, 1, 0.04)
+            b.icon = b:CreateTexture(nil, "ARTWORK")
+            b.icon:SetSize(18, 18)
+            b.icon:SetPoint("LEFT", 14, 0)
+            b.icon:SetTexture(tab.icon)
+            b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            b.label = Text(b, 13)
+            b.label:SetPoint("LEFT", b.icon, "RIGHT", 10, 0)
+            b.label:SetText(tab.label)
+            tabButtons[tab.key] = b
+
+            local page = NewPage(content, tab.label, tab.sub)
+            pages[tab.key] = page
+            if tab.module and not root[tab.module] then
+                b.icon:SetDesaturated(true)
+                Note(page, "This module is off while its standalone addon is enabled.")
+                page:Finish()
+            else
+                local ok, err = pcall(tab.build, page)
+                if not ok then
+                    Note(page, "|cffff6666This page failed to build:|r " .. tostring(err))
+                    page:Finish()
+                end
+            end
+            b:SetScript("OnClick", function() SelectTab(tab.key) end)
+        end
+    end
+
+    local hint = Text(side, 11, T.muted, MONO ~= nil)
+    hint:SetPoint("BOTTOMLEFT", 20, 14)
+    hint:SetText("/mu  ·  /mu t  ·  /mu f")
+    return f
+end
+
+local function OpenHub(key)
+    hub = hub or BuildHub()
+    SelectTab(key or current or "text")
+    hub:Show()
+end
+root.OpenHub = OpenHub
+
+function root.ToggleHub()
+    if hub and hub:IsShown() then hub:Hide() else OpenHub() end
+end
+
+function MirogaUtilities_OnCompartmentClick()
+    root.ToggleHub()
+end
+
+-- the modules' own entry points now open their hub pages
+if root.CombatText then
+    root.CombatText.OpenOptions = function() OpenHub("text") end
+end
+if root.FlagPlates then
+    local fp = root.FlagPlates
+    fp.ToggleUI = function()
+        if hub and hub:IsShown() and current == "players" then hub:Hide() else OpenHub("players") end
+    end
+    -- list changes (add, remove, stats) refresh the open players page
+    fp.RefreshUI = function()
+        local page = pages.players
+        if page and page:IsVisible() and page.RefreshList then page.RefreshList() end
+    end
+end
+
+-- Esc > Options > AddOns: one entry that opens this window
+if Settings and Settings.RegisterCanvasLayoutCategory then
+    local stub = CreateFrame("Frame")
+    local title = Text(stub, 20)
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText("|cff" .. ACCENT_HEX .. "Miroga|r Utilities")
+    local note = Text(stub, 12, T.muted)
+    note:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+    note:SetText("All settings live in one window: /mu")
+    local open = FlatButton(stub, "Open Miroga Utilities", 180, function()
+        if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
+        OpenHub()
+    end, true)
+    open:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
+    local category = Settings.RegisterCanvasLayoutCategory(stub, "Miroga Utilities")
+    Settings.RegisterAddOnCategory(category)
+end

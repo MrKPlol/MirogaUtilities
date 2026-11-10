@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="CLICK MirogaShiftCat:LeftButton" category="ADDONS"/>
+    <Binding name="CLICK MirogaShiftBear:LeftButton" category="ADDONS"/>
+    <Binding name="CLICK MirogaShiftTravel:LeftButton" category="ADDONS"/>
+</Bindings>

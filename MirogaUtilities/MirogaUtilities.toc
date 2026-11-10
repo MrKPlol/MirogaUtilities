@@ -1,0 +1,17 @@
+## Interface: 16001, 16002
+## Title: Miroga Utilities
+## Notes: Personal Forever tools: druid powershift without the action bar bug, combat text and flagged nameplates.
+## Author: Karl
+## Version: 1.3.1
+## IconTexture: Interface\Icons\Ability_Druid_CatForm
+## AddonCompartmentFunc: MirogaUtilities_OnCompartmentClick
+## SavedVariables: KPCombatTextDB, KPFlagPlatesDB
+## OptionalDeps: KPCombatText, KPFlagPlates, EllesmereUI, EllesmereUINameplates, Plater, NaowhUI, NaowhUI_EUI
+
+Core.lua
+Modules/Powershift.lua
+Modules/CombatText/KPCombatText.lua
+Modules/FlagPlates/Core.lua
+Modules/FlagPlates/Plates.lua
+Modules/FlagPlates/Encounters.lua
+Hub.lua
