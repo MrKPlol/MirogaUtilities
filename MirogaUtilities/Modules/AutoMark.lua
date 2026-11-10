@@ -19,6 +19,7 @@ local BUTTON = "MirogaAutoMarkButton"
 _G["BINDING_NAME_CLICK " .. BUTTON .. ":LeftButton"] = "Auto Mark: mark group"
 
 am.SLOTS = SLOTS
+am.applied = {}       -- GUID -> mark the last click put on, this session
 am.DEFAULTS = { enabled = true, self = 0, slots = {} }
 local DEFAULT_MARKS = { 1, 2, 3, 4 } -- star, circle, diamond, triangle
 
@@ -115,10 +116,19 @@ function am.Evaluate()
     end
     if unknown then return nil, "unknown" end
     if db.self > 0 then wanted[#wanted + 1] = { "player", db.self } end
+    -- Forever may hand the current mark back as a secret: then trust what
+    -- the last click put on that player.
     local missing = {}
     for _, w in ipairs(wanted) do
         local current = GetRaidTargetIndex(w[1])
-        if issecret(current) or current ~= w[2] then missing[#missing + 1] = w end
+        local done
+        if issecret(current) then
+            local guid = UnitGUID(w[1])
+            done = guid and not issecret(guid) and am.applied[guid] == w[2]
+        else
+            done = current == w[2]
+        end
+        if not done then missing[#missing + 1] = w end
     end
     return missing
 end
@@ -170,6 +180,23 @@ button:SetScript("OnEnter", function(self)
 end)
 button:SetScript("OnLeave", GameTooltip_Hide)
 
+-- After a click the marks are on: hide until the group changes. The macro
+-- runs before PostClick, so the attribute still holds what was just marked.
+local lastMarked = {}
+button:HookScript("PostClick", function()
+    for _, m in ipairs(lastMarked) do
+        local guid = UnitGUID(m[1])
+        if guid and not issecret(guid) then am.applied[guid] = m[2] end
+    end
+    if InCombatLockdown() then
+        am.hideAfterCombat = true
+        am.WaitForCombat()
+    else
+        button:SetAttribute("macrotext", "")
+        button:Hide()
+    end
+end)
+
 local function RestorePosition()
     local p = am.db.pos
     if type(p) == "table" and p[1] then
@@ -187,6 +214,10 @@ end
 
 local pending = false     -- a change waits for combat to end
 local events = CreateFrame("Frame")
+
+function am.WaitForCombat()
+    events:RegisterEvent("PLAYER_REGEN_ENABLED")
+end
 
 local function HideButton()
     button:SetAttribute("macrotext", "")
@@ -215,6 +246,7 @@ function am.Apply(announce)
         return false, reason
     end
     local lines, marks = {}, {}
+    lastMarked = missing
     for _, m in ipairs(missing) do
         lines[#lines + 1] = format("/tm [@%s] %d", m[1], m[2])
         marks[#marks + 1] = format("|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_%d:12|t", m[2])
@@ -282,6 +314,10 @@ events:SetScript("OnEvent", function(self, event, arg)
         if button:IsShown() then am.Apply(false) end
     elseif event == "PLAYER_REGEN_ENABLED" then
         self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        if am.hideAfterCombat then
+            am.hideAfterCombat = false
+            HideButton()
+        end
         if pending then
             pending = false
             am.Apply(false)
