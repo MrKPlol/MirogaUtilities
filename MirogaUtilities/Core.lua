@@ -65,3 +65,17 @@ SlashCmdList.MIROGAUTILITIES = function(msg)
         Say("/mu (window), /mu t (flag target), /mu f (players), /mu c (combat text), /mu r (auto mark), /mu m (move boxes), /mu p (preview)")
     end
 end
+
+-- ---------------------------------------------------------------------------
+-- empty system lines: Forever sends some CHAT_MSG_SYSTEM events with an empty
+-- text (seen after joining a guild), which show up as a bare timestamp.
+-- Only lines that are exactly empty are dropped; secret texts pass untouched.
+
+local issecret = issecretvalue or function() return false end
+local addFilter = (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter) or ChatFrame_AddMessageEventFilter
+if addFilter then
+    addFilter("CHAT_MSG_SYSTEM", function(_, _, msg, ...)
+        if type(msg) == "string" and not issecret(msg) and not msg:find("%S") then return true end
+        return false, msg, ...
+    end)
+end
