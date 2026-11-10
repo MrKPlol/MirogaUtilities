@@ -57,9 +57,11 @@ SlashCmdList.MIROGAUTILITIES = function(msg)
     elseif command == "c" or command == "text" then
         if not ct then return end
         if rest == "" then Open("text") else ct.Slash(TEXT_SHORT[rest] or rest) end
+    elseif command == "r" or command == "mark" then
+        if rest == "now" and root.AutoMark then root.AutoMark.Apply(true) else Open("marks") end
     elseif PAGES[command] then
         Open(PAGES[command])
     else
-        Say("/mu (window), /mu t (flag target), /mu f (players), /mu c (combat text), /mu m (move boxes), /mu p (preview)")
+        Say("/mu (window), /mu t (flag target), /mu f (players), /mu c (combat text), /mu r (auto mark), /mu m (move boxes), /mu p (preview)")
     end
 end

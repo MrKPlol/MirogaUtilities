@@ -837,6 +837,53 @@ local function BuildShiftPage(page)
 end
 
 -- ---------------------------------------------------------------------------
+-- auto mark
+
+local function BuildMarksPage(page)
+    local am = root.AutoMark
+    local function db() return am.db or {} end
+
+    Section(page, "Auto Mark")
+    ToggleRow(page, "On", "When a new player joins and only your listed players are in the party.",
+        function() return db().enabled end, function(v) am.SetEnabled(v) end)
+
+    Section(page, "Players and marks")
+    for i = 1, am.SLOTS do
+        local row = Row(page, "Player " .. i, nil, 40)
+        local input = Input(row, 230, "Name or Name Surname", function(text)
+            db().slots[i].name = strtrim(text)
+        end, function(text)
+            if db().slots then db().slots[i].name = strtrim(text) end
+        end)
+        input:SetPoint("LEFT", 90, 0)
+        input:SetScript("OnEditFocusLost", function(self)
+            self:SetBackdropBorderColor(1, 1, 1, 0.15)
+            db().slots[i].name = strtrim(self:GetText())
+        end)
+        page.refreshers[#page.refreshers + 1] = function()
+            if db().slots and not input:HasFocus() then input:SetText(db().slots[i].name or "") end
+        end
+        Control(page, row, MenuButton(row, 170, am.MarkChoices,
+            function() return db().slots and db().slots[i].mark or 0 end,
+            function(v) db().slots[i].mark = v end))
+    end
+    MenuRow(page, "Your own mark", "Goes on you too when the group is all yours.", am.MarkChoices(),
+        function() return db().self end, function(v) db().self = v end)
+
+    ButtonBar(page, {
+        { "Check now", 110, function() am.Apply(true) end, true },
+        { "Set key", 100, function()
+            local ok = Settings and Settings.KEYBINDINGS_CATEGORY_ID
+                and pcall(Settings.OpenToCategory, Settings.KEYBINDINGS_CATEGORY_ID)
+            if not ok then Say("Game Menu > Options > Keybindings > AddOns.") end
+        end },
+        { "Reset button position", 170, function() am.ResetPosition() end },
+    })
+    Note(page, "Forever lets addons set marks only on a click or key press, so a |cff" .. ACCENT_HEX .. "Mark group|r button pops up: one click marks everyone (or bind a key). Right-drag moves it.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
 -- commands
 
 local COMMANDS = {
@@ -852,6 +899,8 @@ local COMMANDS = {
     { "/mu p", "combat text preview" },
     { "/mu b", "Blizzard's own combat text on / off" },
     { "/mu s", "powershift keys" },
+    { "/mu r", "auto raid marks" },
+    { "/mu r now", "check the group and mark" },
 }
 
 local function BuildHelpPage(page)
@@ -882,6 +931,9 @@ local TABS = {
         icon = "Interface\\Icons\\Ability_Hunter_SniperShot", module = "FlagPlates", build = BuildPlayersPage },
     { key = "alerts", label = "Plates & Alerts", sub = "Plate color, sound, chat message and statistics.",
         icon = "Interface\\Icons\\Spell_Holy_SealOfWisdom", module = "FlagPlates", build = BuildAlertsPage },
+    { group = "GROUP" },
+    { key = "marks", label = "Auto Mark", sub = "Raid marks on your own group, nobody else in it.",
+        icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1", module = "AutoMark", build = BuildMarksPage },
     { group = "DRUID" },
     { key = "shift", label = "Powershift", sub = "Form to form in one key press, without the action bar bug.",
         icon = "Interface\\Icons\\Ability_Druid_CatForm", build = BuildShiftPage },
