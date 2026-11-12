@@ -802,7 +802,7 @@ end
 local SHIFT_KEYS = {
     { "Cat Form", "CLICK MirogaShiftCat:LeftButton" },
     { "Bear Form", "CLICK MirogaShiftBear:LeftButton" },
-    { "Travel / Aquatic Form", "CLICK MirogaShiftTravel:LeftButton", "Aquatic while swimming." },
+    { "Travel / Aquatic Form", "CLICK MirogaShiftTravel:LeftButton", "Detects: Aquatic in water, Travel outdoors. Again = cancel." },
 }
 
 local function BuildShiftPage(page)
@@ -884,6 +884,62 @@ local function BuildMarksPage(page)
 end
 
 -- ---------------------------------------------------------------------------
+-- weather
+
+local function BuildWeatherPage(page)
+    local wx = root.Weather
+    local function db() return wx.db or wx.DEFAULTS end
+
+    Section(page, "Weather")
+    ToggleRow(page, "Low weather", "On: rain, snow and sandstorms drop to the level below. Off: your old values come back.",
+        function() return wx.IsLow() end, function(v) wx.SetLow(v) end)
+    SliderRow(page, "Low level", "0 = no weather, 3 = full storm. Changes apply at once while low is on.",
+        0, 3, 1, function() return db().level end, function(v) wx.SetLevel(v) end)
+
+    Section(page, "Automatic")
+    ToggleRow(page, "In storm zones", "Low while you are in a zone on the list, back when you leave.",
+        function() return db().autoZones end, function(v) wx.SetAuto("autoZones", v) end)
+    ToggleRow(page, "In battlegrounds", "Low inside every battleground, back when you leave.",
+        function() return db().autoBG end, function(v) wx.SetAuto("autoBG", v) end)
+    local zoneRow = Row(page, "Zones", nil, 40)
+    local zones = Input(zoneRow, 430, "Zone, Zone, ...", function(text)
+        wx.SetZones(strtrim(text))
+    end)
+    zones:SetPoint("LEFT", 70, 0)
+    zones:SetScript("OnEditFocusLost", function(self)
+        self:SetBackdropBorderColor(1, 1, 1, 0.15)
+        wx.SetZones(strtrim(self:GetText()))
+    end)
+    page.refreshers[#page.refreshers + 1] = function()
+        if not zones:HasFocus() then zones:SetText(db().zones or "") end
+    end
+    ButtonBar(page, { { "Add current zone", 150, function() wx.AddCurrentZone() end } })
+    Note(page, "Zone names as the game shows them, split by commas. Switch it off by hand inside a zone and it stays off until you leave.")
+
+    Section(page, "Status")
+    local row = Row(page, "Now in the game", "weatherDensity right now, and the value \"off\" brings back.")
+    local status = Text(row, 13, ACCENT, MONO ~= nil)
+    status:SetPoint("RIGHT", -14, 0)
+    status:SetJustifyH("RIGHT")
+    page.refreshers[#page.refreshers + 1] = function()
+        local now = wx.Current()
+        local back = db().saved and db().saved.weatherDensity
+        status:SetText((now and tostring(now) or "?") .. (wx.IsLow() and back and ("|cff888888  (back: " .. back .. ")|r") or ""))
+    end
+
+    ButtonBar(page, {
+        { "Toggle now", 110, function() wx.Toggle() end, true },
+        { "Set key", 100, function()
+            local ok = Settings and Settings.KEYBINDINGS_CATEGORY_ID
+                and pcall(Settings.OpenToCategory, Settings.KEYBINDINGS_CATEGORY_ID)
+            if not ok then Say("Game Menu > Options > Keybindings > AddOns.") end
+        end },
+    })
+    Note(page, "Key: Keybindings > AddOns > |cff" .. ACCENT_HEX .. "Weather: low / back|r, or /mu w. Fog from the zone's lighting may stay; particles go.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
 -- commands
 
 local COMMANDS = {
@@ -901,6 +957,8 @@ local COMMANDS = {
     { "/mu s", "powershift keys" },
     { "/mu r", "auto raid marks" },
     { "/mu r now", "check the group and mark" },
+    { "/mu w", "weather low / back" },
+    { "/mu w o", "weather settings" },
 }
 
 local function BuildHelpPage(page)
@@ -934,6 +992,9 @@ local TABS = {
     { group = "GROUP" },
     { key = "marks", label = "Auto Mark", sub = "Raid marks on your own group, nobody else in it.",
         icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1", module = "AutoMark", build = BuildMarksPage },
+    { group = "WORLD" },
+    { key = "weather", label = "Weather", sub = "One click: storms low. Next click: your old weather back.",
+        icon = "Interface\\Icons\\Spell_Frost_IceStorm", module = "Weather", build = BuildWeatherPage },
     { group = "DRUID" },
     { key = "shift", label = "Powershift", sub = "Form to form in one key press, without the action bar bug.",
         icon = "Interface\\Icons\\Ability_Druid_CatForm", build = BuildShiftPage },
@@ -1102,6 +1163,14 @@ if root.FlagPlates then
     fp.RefreshUI = function()
         local page = pages.players
         if page and page:IsVisible() and page.RefreshList then page.RefreshList() end
+    end
+end
+
+-- a key press or /mu w updates the open weather page
+if root.Weather then
+    root.Weather.OnChange = function()
+        local page = pages.weather
+        if page and page:IsVisible() then page:Refresh() end
     end
 end
 

@@ -26,14 +26,59 @@ end
 CreateShiftButton("MirogaShiftCat", CAT_FORM)
 local bearButton = CreateShiftButton("MirogaShiftBear", BEAR_FORM)
 
--- Travel key: Aquatic Form while swimming, Travel Form otherwise. A state
--- driver swaps the spell, so this also works in combat.
+-- Travel key with detection: Aquatic Form while swimming, Travel Form
+-- outdoors. Pressing it in the form it would pick only cancels the form.
+-- Indoors it does nothing, so a stray press keeps Bear or Cat Form.
+-- A state driver swaps the action, so this also works in combat.
 local travelButton = CreateShiftButton("MirogaShiftTravel", TRAVEL_FORM,
     "SecureActionButtonTemplate, SecureHandlerStateTemplate")
-travelButton:SetAttribute("_onstate-water", format(
-    [[self:SetAttribute("spell", newstate == "swim" and %d or %d)]],
-    AQUATIC_FORM, TRAVEL_FORM))
-RegisterStateDriver(travelButton, "water", "[swimming] swim; land")
+travelButton:SetAttribute("_onstate-water", format([[
+    if newstate == "swim" or newstate == "land" then
+        self:SetAttribute("macrotext", "/cancelform")
+        self:SetAttribute("typerelease", "spell")
+        self:SetAttribute("spell", newstate == "swim" and %d or %d)
+    elseif newstate == "off" then
+        self:SetAttribute("macrotext", "/cancelform")
+        self:SetAttribute("typerelease", "macro")
+    else
+        self:SetAttribute("macrotext", "")
+        self:SetAttribute("typerelease", "macro")
+    end
+]], AQUATIC_FORM, TRAVEL_FORM))
+
+-- Form indices depend on which forms are known, so the driver is rebuilt
+-- from the stance bar whenever it changes.
+local function FormIndex(spellID)
+    for i = 1, GetNumShapeshiftForms() do
+        local _, _, _, id = GetShapeshiftFormInfo(i)
+        if id == spellID then return i end
+    end
+end
+
+local function TravelDriver()
+    local aquatic, travel = FormIndex(AQUATIC_FORM), FormIndex(TRAVEL_FORM)
+    local parts = {}
+    if aquatic then
+        parts[#parts + 1] = format("[swimming,form:%d] off; [swimming] swim", aquatic)
+    else
+        parts[#parts + 1] = "[swimming] none"
+    end
+    if travel then
+        parts[#parts + 1] = format("[form:%d] off; [indoors] none; land", travel)
+    else
+        parts[#parts + 1] = "none"
+    end
+    return table.concat(parts, "; ")
+end
+
+local lastDriver
+local function UpdateTravelDriver()
+    local driver = TravelDriver()
+    if driver ~= lastDriver then
+        lastDriver = driver
+        RegisterStateDriver(travelButton, "water", driver)
+    end
+end
 
 -- Dire Bear Form replaces Bear Form on the stance bar once learned.
 local watcher = CreateFrame("Frame")
@@ -54,6 +99,7 @@ local function UpdateBearSpell()
         spell = DIRE_BEAR_FORM
     end
     bearButton:SetAttribute("spell", spell)
+    UpdateTravelDriver()
 end
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 watcher:RegisterEvent("UPDATE_SHAPESHIFT_FORMS")

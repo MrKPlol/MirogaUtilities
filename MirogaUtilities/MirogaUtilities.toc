@@ -1,11 +1,11 @@
 ## Interface: 16001, 16002
 ## Title: Miroga Utilities
-## Notes: Personal Forever tools: druid powershift without the action bar bug, combat text, flagged nameplates and auto raid marks.
+## Notes: Personal Forever tools: druid powershift without the action bar bug, combat text, flagged nameplates, auto raid marks and a weather switch.
 ## Author: Karl
-## Version: 1.4.5
+## Version: 1.7.0
 ## IconTexture: Interface\Icons\Ability_Druid_CatForm
 ## AddonCompartmentFunc: MirogaUtilities_OnCompartmentClick
-## SavedVariables: KPCombatTextDB, KPFlagPlatesDB, MirogaAutoMarkDB
+## SavedVariables: KPCombatTextDB, KPFlagPlatesDB, MirogaAutoMarkDB, MirogaWeatherDB
 ## OptionalDeps: KPCombatText, KPFlagPlates, EllesmereUI, EllesmereUINameplates, Plater, NaowhUI, NaowhUI_EUI
 
 Core.lua
@@ -15,4 +15,5 @@ Modules/FlagPlates/Core.lua
 Modules/FlagPlates/Plates.lua
 Modules/FlagPlates/Encounters.lua
 Modules/AutoMark.lua
+Modules/Weather.lua
 Hub.lua
