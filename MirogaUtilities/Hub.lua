@@ -135,7 +135,7 @@ local function FlatSlider(parent, width, min, max, step, get, set, format)
     value:SetPoint("LEFT", s, "RIGHT", 10, 0)
     value:SetWidth(56)
     local refreshing = false
-    local function show(v) value:SetText(format(v)) end
+    local function show(v) value:SetText(format and format(v) or tostring(v)) end
     s:SetScript("OnValueChanged", function(_, v)
         v = math.floor(v / step + 0.5) * step
         show(v)
@@ -894,7 +894,8 @@ local function BuildWeatherPage(page)
     ToggleRow(page, "Low weather", "On: rain, snow and sandstorms drop to the level below. Off: your old values come back.",
         function() return wx.IsLow() end, function(v) wx.SetLow(v) end)
     SliderRow(page, "Low level", "0 = no weather, 3 = full storm. Changes apply at once while low is on.",
-        0, 3, 1, function() return db().level end, function(v) wx.SetLevel(v) end)
+        0, 3, 1, function() return db().level end, function(v) wx.SetLevel(v) end,
+        function(v) return tostring(v) end)
 
     Section(page, "Automatic")
     ToggleRow(page, "In storm zones", "Low while you are in a zone on the list, back when you leave.",

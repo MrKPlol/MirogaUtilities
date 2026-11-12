@@ -2,7 +2,7 @@
 ## Title: Miroga Utilities
 ## Notes: Personal Forever tools: druid powershift without the action bar bug, combat text, flagged nameplates, auto raid marks and a weather switch.
 ## Author: Karl
-## Version: 1.7.0
+## Version: 1.7.1
 ## IconTexture: Interface\Icons\Ability_Druid_CatForm
 ## AddonCompartmentFunc: MirogaUtilities_OnCompartmentClick
 ## SavedVariables: KPCombatTextDB, KPFlagPlatesDB, MirogaAutoMarkDB, MirogaWeatherDB
