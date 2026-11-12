@@ -941,6 +941,32 @@ local function BuildWeatherPage(page)
 end
 
 -- ---------------------------------------------------------------------------
+-- login quiet
+
+local function BuildQuietPage(page)
+    local lq = root.LoginQuiet
+    local function db() return lq.db or lq.DEFAULTS end
+
+    Section(page, "Login quiet")
+    ToggleRow(page, "On", "Hides addon messages after login and /reload. Player chat and system messages stay.",
+        function() return db().enabled end, function(v) lq.SetEnabled(v) end)
+    SliderRow(page, "Quiet for", "Seconds after the loading screen. Slow addons talk late.",
+        3, 30, 1, function() return db().seconds end, function(v) db().seconds = v end,
+        function(v) return v .. " s" end)
+
+    Section(page, "This session")
+    local row = Row(page, "Hidden lines", "Everything that was swallowed since the last login or reload.")
+    local count = Text(row, 13, ACCENT, MONO ~= nil)
+    count:SetPoint("RIGHT", -14, 0)
+    count:SetJustifyH("RIGHT")
+    page.refreshers[#page.refreshers + 1] = function() count:SetText(tostring(#lq.hidden)) end
+
+    ButtonBar(page, { { "Show in chat", 130, function() lq.Show() end, true } })
+    Note(page, "Or type |cff" .. ACCENT_HEX .. "/mu q|r. Takes effect from the next login or /reload.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
 -- commands
 
 local COMMANDS = {
@@ -959,6 +985,7 @@ local COMMANDS = {
     { "/mu r", "auto raid marks" },
     { "/mu r now", "check the group and mark" },
     { "/mu w", "weather low / back" },
+    { "/mu q", "show the hidden login lines" },
     { "/mu w o", "weather settings" },
 }
 
@@ -993,6 +1020,9 @@ local TABS = {
     { group = "GROUP" },
     { key = "marks", label = "Auto Mark", sub = "Raid marks on your own group, nobody else in it.",
         icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1", module = "AutoMark", build = BuildMarksPage },
+    { group = "CHAT" },
+    { key = "quiet", label = "Login quiet", sub = "No addon spam in the chat after login or /reload.",
+        icon = "Interface\\Icons\\INV_Misc_Note_02", module = "LoginQuiet", build = BuildQuietPage },
     { group = "WORLD" },
     { key = "weather", label = "Weather", sub = "One click: storms low. Next click: your old weather back.",
         icon = "Interface\\Icons\\Spell_Frost_IceStorm", module = "Weather", build = BuildWeatherPage },

@@ -59,13 +59,16 @@ SlashCmdList.MIROGAUTILITIES = function(msg)
         if rest == "" then Open("text") else ct.Slash(TEXT_SHORT[rest] or rest) end
     elseif command == "r" or command == "mark" then
         if rest == "now" and root.AutoMark then root.AutoMark.Apply(true) else Open("marks") end
+    elseif command == "q" or command == "quiet" then
+        if not root.LoginQuiet then return end
+        if rest == "" then root.LoginQuiet.Show() else Open("quiet") end
     elseif command == "w" or command == "weather" then
         if not root.Weather then return end
         if rest == "" then root.Weather.Toggle() else Open("weather") end
     elseif PAGES[command] then
         Open(PAGES[command])
     else
-        Say("/mu (window), /mu t (flag target), /mu f (players), /mu c (combat text), /mu r (auto mark), /mu w (weather low/back), /mu m (move boxes), /mu p (preview)")
+        Say("/mu (window), /mu t (flag target), /mu f (players), /mu c (combat text), /mu r (auto mark), /mu w (weather low/back), /mu q (hidden login lines), /mu m (move boxes), /mu p (preview)")
     end
 end
 
