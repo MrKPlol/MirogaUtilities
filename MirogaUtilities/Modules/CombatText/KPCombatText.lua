@@ -207,15 +207,19 @@ local CATEGORIES = {
     { key = "hots", label = "Heals over time", types = { "PERIODICHEAL", "PERIODIC_HEAL", "PERIODIC_HEAL_ABSORB" } },
     { key = "shields", label = "Shields gained", types = { "ABSORB_ADDED" } },
     { key = "buffs", label = "Buffs gained", types = { "AURA_START", "SPELL_AURA_START", "AURA_END", "SPELL_AURA_END" } },
-    { key = "resources", label = "Resource gains (mana, rage, energy, ...)", types = { "ENERGIZE", "PERIODIC_ENERGIZE",
+    { key = "resources", label = "Resource gains (mana, rage, energy, ...)", types = { "ENERGIZE",
         "MANA", "ENERGY", "RAGE", "FOCUS", "RUNE", "COMBO_POINTS" } },
+    -- Passive regeneration ticks every few seconds; off unless switched on.
+    { key = "ticks", label = "Resource ticks (regeneration)", types = { "PERIODIC_ENERGIZE" }, default = false },
     { key = "combat", label = "Entering / leaving combat", types = { "ENTERING_COMBAT", "LEAVING_COMBAT" } },
     { key = "warnings", label = "Low health / low mana", types = { "HEALTH_LOW", "MANA_LOW" } },
     { key = "other", label = "Other (honor, experience, money, ...)", types = {} },
 }
 local CATEGORY_OF = {}
+local CATEGORY_DEFAULT = {}
 for _, category in ipairs(CATEGORIES) do
     for _, name in ipairs(category.types) do CATEGORY_OF[name] = category.key end
+    CATEGORY_DEFAULT[category.key] = category.default ~= false
 end
 -- Aura fades have their own switch on top of their category.
 local FADES = { AURA_END = true, SPELL_AURA_END = true, AURA_END_HARMFUL = true, SPELL_AURA_END_HARMFUL = true }
@@ -309,8 +313,26 @@ end
 local function shown(mtype)
     local o = savedOptions()
     if FADES[mtype] and not o.fades then return false end
-    return o.show[CATEGORY_OF[mtype] or "other"] ~= false
+    local key = CATEGORY_OF[mtype] or "other"
+    local v = o.show[key]
+    if v == nil then return CATEGORY_DEFAULT[key] ~= false end
+    return v == true
 end
+
+local function categoryShown(key)
+    local v = savedOptions().show[key]
+    if v == nil then return CATEGORY_DEFAULT[key] ~= false end
+    return v == true
+end
+
+local function setCategoryShown(key, v)
+    -- nil keeps the category on its default, so later default changes apply
+    local show = savedOptions().show
+    if (v and true or false) == (CATEGORY_DEFAULT[key] ~= false) then show[key] = nil else show[key] = v and true or false end
+end
+
+-- /mu c debug: print the event type of every combat text line for a while
+local debugUntil = 0
 
 -- ---------------------------------------------------------------------------
 -- consolidation: the first hit renders immediately; repeats inside the window
@@ -866,6 +888,7 @@ f:HookScript("OnEvent", function(self, event, mtype)
     if type(getCurrentEventInfo) ~= "function" then return end
     if issecretvalue and issecretvalue(mtype) then return end
     if type(mtype) ~= "string" then return end
+    if GetTime() < debugUntil then print("|cff40e0d0MU SCT|r " .. mtype) end
     if unitCombatLive and UNIT_COMBAT_COVERS[mtype] then return end
     if not shown(mtype) then return end
     local data, a2, a3 = getCurrentEventInfo()
@@ -982,6 +1005,7 @@ local function toggleBlizzard()
 end
 
 ns.CATEGORIES, ns.COLOR_SLOTS, ns.DEFAULTS, ns.LIMITS = CATEGORIES, COLOR_SLOTS, DEFAULTS, LIMITS
+ns.CategoryShown, ns.SetCategoryShown = categoryShown, setCategoryShown
 ns.DEFAULT_COLORS, ns.DIRECTIONS, ns.streams = DEFAULT_COLORS, DIRECTIONS, streams
 ns.Options, ns.Color, ns.ApplySettings = savedOptions, savedColor, applySettings
 ns.SetAnchorsShown, ns.SetDirection, ns.ResetPositions = setAnchorsShown, setDirection, resetPositions
@@ -1026,6 +1050,9 @@ ns.Slash = function(msg)
         print("KPCombatText: positions and directions reset.")
     elseif msg == "test" then
         preview()
+    elseif msg == "debug" then
+        debugUntil = GetTime() + 30
+        print("KPCombatText: printing combat text event types for 30 s.")
     elseif msg == "blizz" then
         print("KPCombatText: Blizzard self combat text " .. (toggleBlizzard() and "ON." or "OFF."))
     elseif (msg == "" or msg == "options" or msg == "config") and ns.OpenOptions then

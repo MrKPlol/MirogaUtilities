@@ -586,10 +586,8 @@ local function BuildEventsPage(page)
             get = function() return o().fades end
             set = function(v) o().fades = v end
         else
-            get = function() return o().show[item.key] ~= false end
-            set = function(v)
-                if v then o().show[item.key] = nil else o().show[item.key] = false end
-            end
+            get = function() return ct.CategoryShown(item.key) end
+            set = function(v) ct.SetCategoryShown(item.key, v) end
         end
         local t = Toggle(cell, get, set)
         t:SetPoint("RIGHT", -8, 0)
