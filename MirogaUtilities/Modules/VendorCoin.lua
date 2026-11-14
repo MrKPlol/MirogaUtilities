@@ -7,7 +7,11 @@
 -- switch: on = count one failed listing (careful), off = the item sells.
 -- Forever works the deposit out on the server. While the AH is open the
 -- module asks it once per listing time and keeps the rate (deposit divided
--- by vendor price); until then it uses 15 % as a guess.
+-- by vendor price); until then it guesses the Classic rates 5/20/60 %.
+-- Every auction costs at least the minimum deposit (1 silver until the
+-- maintenance on Nov 18, then 1 copper), spread over the stack you list.
+--
+-- Items on the Stockpile hold list get a green watch instead of the coin.
 --
 -- Bags: Baganator corner widget ("Miroga: vendor beats AH"). Without
 -- Baganator the plain Blizzard bags get the coin directly.
@@ -16,11 +20,11 @@ local vc = {}
 root.VendorCoin = vc
 
 local CALLER = "MirogaUtilities"
-local GUESS_RATE = 0.15
+local GUESS_RATES = { 0.05, 0.20, 0.60 }
 vc.DURATIONS = { { 1, "2 hours" }, { 2, "8 hours" }, { 3, "24 hours" } }
 vc.DEFAULTS = {
     enabled = true, cut = 5, effort = 3, deposit = true, duration = 3,
-    bound = false, rates = {},
+    bound = false, rates = {}, minDeposit = 100,
 }
 
 local GetItemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
@@ -39,11 +43,12 @@ function vc.Rate()
     local db = vc.db or vc.DEFAULTS
     local rate = db.rates and db.rates[db.duration]
     if rate then return rate, true end
-    return GUESS_RATE, false
+    return GUESS_RATES[db.duration] or 0.6, false
 end
 
 -- all numbers per unit, in copper. nil = not decidable (no data yet)
-function vc.Evaluate(itemLink)
+-- count = stack size you would list; the minimum deposit is per auction
+function vc.Evaluate(itemLink, count)
     if type(itemLink) ~= "string" or not Auctionator_OK() then return nil end
     local sellPrice = select(11, GetItemInfo(itemLink))
     if sellPrice == nil then return nil end
@@ -53,18 +58,26 @@ function vc.Evaluate(itemLink)
     local db = vc.db or vc.DEFAULTS
     local net = ah * (1 - (db.cut + (db.effort or 0)) / 100)
     local deposit = 0
-    if db.deposit then deposit = sellPrice * vc.Rate() end
+    if db.deposit then
+        deposit = math.max(sellPrice * vc.Rate(), (db.minDeposit or 0) / math.max(1, count or 1))
+    end
     net = net - deposit
     return sellPrice > net, sellPrice, ah, net, deposit
 end
 
--- a bag slot: true = coin
-local function ShouldMark(itemLink, isBound)
+-- a bag slot: "hold" (green watch), "vendor" (red coin), false, or nil
+-- when the item data is not loaded yet
+local function Mark(itemLink, isBound, count)
+    local sp = root.Stockpile
+    if sp and sp.IsHeld(itemLink) then return "hold" end
     local db = vc.db
     if not db or not db.enabled then return false end
     if isBound and not db.bound then return false end
-    return vc.Evaluate(itemLink)
+    local result = vc.Evaluate(itemLink, count)
+    if result == nil then return nil end
+    return result and "vendor" or false
 end
+vc.Mark = Mark
 
 -- ---------------------------------------------------------------------------
 -- the coin
@@ -78,10 +91,20 @@ local function MakeCoin(parent)
     return coin
 end
 
+local function MakeWatch(parent)
+    local watch = parent:CreateTexture(nil, "OVERLAY", nil, 7)
+    watch:SetTexture("Interface\\Icons\\INV_Misc_PocketWatch_01")
+    watch:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    watch:SetVertexColor(0.55, 1, 0.55)
+    watch:SetSize(14, 14)
+    return watch
+end
+
 -- ---------------------------------------------------------------------------
 -- Baganator
 
 local WIDGET_ID = "miroga_vendor_coin"
+local HOLD_ID = "miroga_hold_watch"
 local usingBaganator = false
 
 local function RegisterBaganator()
@@ -89,19 +112,25 @@ local function RegisterBaganator()
         return
     end
     usingBaganator = true
-    Baganator.API.RegisterCornerWidget("Miroga: vendor beats AH", WIDGET_ID,
-        function(coin, details)
-            if not details or not details.itemLink then return false end
-            return ShouldMark(details.itemLink, details.isBound)
-        end,
-        function(itemButton)
-            local frame = CreateFrame("Frame", nil, itemButton)
-            frame:SetSize(14, 14)
-            frame.padding = 0
-            MakeCoin(frame):SetAllPoints()
-            return frame
-        end,
-        { corner = "bottom_right", priority = 1 })
+    local function Widget(label, id, want, make)
+        Baganator.API.RegisterCornerWidget(label, id,
+            function(_, details)
+                if not details or not details.itemLink then return false end
+                local mark = Mark(details.itemLink, details.isBound, details.itemCount)
+                if mark == nil then return nil end
+                return mark == want
+            end,
+            function(itemButton)
+                local frame = CreateFrame("Frame", nil, itemButton)
+                frame:SetSize(14, 14)
+                frame.padding = 0
+                make(frame):SetAllPoints()
+                return frame
+            end,
+            { corner = "bottom_right", priority = 1 })
+    end
+    Widget("Miroga: vendor beats AH", WIDGET_ID, "vendor", MakeCoin)
+    Widget("Miroga: hold for later", HOLD_ID, "hold", MakeWatch)
 end
 
 -- ---------------------------------------------------------------------------
@@ -116,14 +145,19 @@ local function UpdateButton(button)
     if bag and slot and C_Container then
         local info = C_Container.GetContainerItemInfo(bag, slot)
         if info and info.hyperlink then
-            mark = ShouldMark(info.hyperlink, info.isBound) == true
+            mark = Mark(info.hyperlink, info.isBound, info.stackCount) or false
         end
     end
-    if mark and not button.MirogaVendorCoin then
+    if mark == "vendor" and not button.MirogaVendorCoin then
         button.MirogaVendorCoin = MakeCoin(button)
         button.MirogaVendorCoin:SetPoint("BOTTOMRIGHT", -2, 2)
     end
-    if button.MirogaVendorCoin then button.MirogaVendorCoin:SetShown(mark) end
+    if mark == "hold" and not button.MirogaHoldWatch then
+        button.MirogaHoldWatch = MakeWatch(button)
+        button.MirogaHoldWatch:SetPoint("BOTTOMRIGHT", -2, 2)
+    end
+    if button.MirogaVendorCoin then button.MirogaVendorCoin:SetShown(mark == "vendor") end
+    if button.MirogaHoldWatch then button.MirogaHoldWatch:SetShown(mark == "hold") end
 end
 
 local function UpdateFrame(frame)
@@ -175,41 +209,71 @@ local function MeasureDeposit()
     local db = vc.db
     if not db or not C_AuctionHouse or not C_AuctionHouse.CalculateItemDeposit then return end
     if not (C_Container and ItemLocation) then return end
-    local best
+    local best, cheapest
     for bag = 0, (NUM_BAG_SLOTS or 4) do
         for slot = 1, C_Container.GetContainerNumSlots(bag) do
             local info = C_Container.GetContainerItemInfo(bag, slot)
             if info and info.hyperlink and not info.isBound then
                 local sellPrice = select(11, GetItemInfo(info.hyperlink))
                 -- the bigger the vendor price, the less rounding in the rate
-                if sellPrice and sellPrice >= 100 and (not best or sellPrice > best.price) then
+                local wantBest = sellPrice and sellPrice >= 100 and (not best or sellPrice > best.price)
+                local wantCheap = sellPrice and sellPrice > 0 and (not cheapest or sellPrice < cheapest.price)
+                if wantBest or wantCheap then
                     local location = ItemLocation:CreateFromBagAndSlot(bag, slot)
                     local okValid, valid = pcall(C_AuctionHouse.IsSellItemValid, location, false)
                     if okValid and valid then
-                        best = { location = location, price = sellPrice, id = info.itemID }
+                        local entry = { location = location, price = sellPrice, id = info.itemID }
+                        if wantBest then best = entry end
+                        if wantCheap then cheapest = entry end
                     end
                 end
             end
         end
     end
-    if not best then return end
-    local commodity = false
-    if C_AuctionHouse.GetItemCommodityStatus then
-        local ok, status = pcall(C_AuctionHouse.GetItemCommodityStatus, best.location)
-        commodity = ok and Enum.ItemCommodityStatus and status == Enum.ItemCommodityStatus.Commodity
-    end
-    local changed
-    for _, d in ipairs(vc.DURATIONS) do
+    local function Deposit(entry, duration)
+        local commodity = false
+        if C_AuctionHouse.GetItemCommodityStatus then
+            local ok, status = pcall(C_AuctionHouse.GetItemCommodityStatus, entry.location)
+            commodity = ok and Enum.ItemCommodityStatus and status == Enum.ItemCommodityStatus.Commodity
+        end
         local ok, deposit
         if commodity and C_AuctionHouse.CalculateCommodityDeposit then
-            ok, deposit = pcall(C_AuctionHouse.CalculateCommodityDeposit, best.id, d[1], 1)
+            ok, deposit = pcall(C_AuctionHouse.CalculateCommodityDeposit, entry.id, duration, 1)
         else
-            ok, deposit = pcall(C_AuctionHouse.CalculateItemDeposit, best.location, d[1], 1)
+            ok, deposit = pcall(C_AuctionHouse.CalculateItemDeposit, entry.location, duration, 1)
         end
-        if ok and type(deposit) == "number" and deposit >= 0 then
-            local rate = deposit / best.price
-            if db.rates[d[1]] ~= rate then
-                db.rates[d[1]] = rate
+        if ok and type(deposit) == "number" and deposit >= 0 then return deposit end
+    end
+    local changed
+    if best then
+        for _, d in ipairs(vc.DURATIONS) do
+            local deposit = Deposit(best, d[1])
+            -- at the floor the deposit says nothing about the rate
+            if deposit and deposit > (db.minDeposit or 0) then
+                local rate = deposit / best.price
+                if db.rates[d[1]] ~= rate then
+                    db.rates[d[1]] = rate
+                    changed = true
+                end
+            end
+        end
+    end
+    -- the cheapest item at the shortest time shows the minimum: if the game
+    -- asks more than the rate gives, that is the floor; if it asks less than
+    -- the floor we knew, the floor went down (1 silver -> 1 copper)
+    if cheapest then
+        local rate = db.rates[1] or GUESS_RATES[1]
+        local deposit = Deposit(cheapest, 1)
+        if deposit and deposit > 0 then
+            local formula = cheapest.price * rate
+            local floor = db.minDeposit
+            if deposit > formula + 1 then
+                floor = deposit
+            elseif deposit < floor then
+                floor = deposit
+            end
+            if floor ~= db.minDeposit then
+                db.minDeposit = floor
                 changed = true
             end
         end
@@ -233,7 +297,15 @@ function vc.Explain(itemLink)
         root.Say("Auctionator is not loaded.")
         return
     end
+    local sp = root.Stockpile
+    if sp and sp.IsHeld(itemLink) then
+        root.Say(itemLink .. ": |cff40ff60held|r for later (Stockpile), no vendor coin.")
+    end
     local mark, vendor, ah, net, deposit = vc.Evaluate(itemLink)
+    local age = sp and sp.ItemAge(sp.ItemID(itemLink))
+    if age and age >= 1 then
+        root.Say(("|cffff9933The AH price is %d %s old.|r"):format(age, age == 1 and "day" or "days"))
+    end
     if mark == nil then
         root.Say(itemLink .. ": item data not loaded yet, try again.")
     elseif not vendor then

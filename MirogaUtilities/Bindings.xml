@@ -4,4 +4,5 @@
     <Binding name="CLICK MirogaShiftTravel:LeftButton" category="ADDONS"/>
     <Binding name="CLICK MirogaAutoMarkButton:LeftButton" category="ADDONS"/>
     <Binding name="MIROGA_WEATHER" category="ADDONS">MirogaUtilities_ToggleWeather()</Binding>
+    <Binding name="MIROGA_HOLD" category="ADDONS">MirogaUtilities_ToggleHold()</Binding>
 </Bindings>

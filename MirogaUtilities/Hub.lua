@@ -989,6 +989,9 @@ local function BuildVendorPage(page)
     for _, d in ipairs(vc.DURATIONS) do choices[#choices + 1] = { value = d[1], text = d[2] } end
     MenuRow(page, "Listing time", "The deposit grows with the listing time.",
         choices, function() return db().duration end, set("duration"))
+    MenuRow(page, "Minimum deposit", "Per auction, shared by the stack. Forever: 1 silver, 1 copper after Nov 18.",
+        { { value = 100, text = "1 silver" }, { value = 1, text = "1 copper" } },
+        function() return db().minDeposit end, set("minDeposit"))
 
     Section(page, "Status")
     local row = Row(page, "Deposit rate", "Share of the vendor price. Measured each time the AH opens.")
@@ -1002,9 +1005,148 @@ local function BuildVendorPage(page)
     page.refreshers[#page.refreshers + 1] = function()
         local rate, measured = vc.Rate()
         status:SetText(("%.1f %%"):format(rate * 100) .. (measured and "" or "|cff888888  (guess, open the AH once)|r"))
-        src:SetText(vc.HasAuctionator() and "Auctionator" or "|cffff5050Auctionator missing|r")
+        local sp = root.Stockpile
+        if not vc.HasAuctionator() then
+            src:SetText("|cffff5050Auctionator missing|r")
+        elseif sp then
+            local age = sp.ScanAge()
+            local old = not age or age >= 86400
+            src:SetText("Auctionator, scan " .. (old and "|cffff9933" or "") .. sp.AgeText(age) .. (old and "|r" or ""))
+        else
+            src:SetText("Auctionator")
+        end
     end
     Note(page, "Point at an item and type |cff" .. ACCENT_HEX .. "/mu v|r to see the numbers. In Baganator the coin is a corner widget: Baganator > Icons, bottom right.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
+-- stockpile
+
+local function BuildStockpilePage(page)
+    local sp = root.Stockpile
+    local function db() return sp.db or sp.DEFAULTS end
+    local function set(key) return function(v)
+        if sp.db then sp.db[key] = v end
+        if root.VendorCoin then root.VendorCoin.Refresh() end
+    end end
+
+    Section(page, "Hold for later")
+    ToggleRow(page, "Raid preset", "Flask herbs, top enchanting mats, rare bars and essences. Raids open Dec 9.",
+        function() return db().preset end, set("preset"))
+    ToggleRow(page, "Cheap hint in tooltips", "Green line when today's AH price is far under the days before.",
+        function() return db().tooltip end, set("tooltip"))
+    SliderRow(page, "Cheap below", "Share of the average of the last 7 days. Also the snipe price without a target.",
+        30, 95, 5, function() return db().cheapPct end, set("cheapPct"), function(v) return v .. " %" end)
+    ToggleRow(page, "Snipe alerts", "After each Auctionator scan: held items at or under their snipe price in chat.",
+        function() return db().alerts end, set("alerts"))
+    ToggleRow(page, "Old price warning", "Tooltip and AH chat say so when prices are a day old or more.",
+        function() return db().stale end, set("stale"))
+
+    Section(page, "Add an item")
+    local addRow = Row(page, "", nil, 40)
+    local input
+    local function add(text)
+        local id = sp.ItemID(strtrim(text or ""))
+        if not id then
+            Say("Shift-click an item into the field, or type its item ID.")
+            return
+        end
+        if not sp.IsHeld(id) then sp.Toggle(id) end
+        input:SetText("")
+        input:ClearFocus()
+    end
+    input = Input(addRow, 300, "Shift-click an item here, or its ID", add)
+    input:SetPoint("LEFT", 8, 0)
+    -- shift-clicked links land in the focused edit box
+    if ChatEdit_InsertLink then
+        hooksecurefunc("ChatEdit_InsertLink", function(link)
+            if input:HasFocus() and link then input:SetText(link) end
+        end)
+    end
+    local addButton = FlatButton(addRow, "Hold", 70, function() add(input:GetText()) end, true)
+    addButton:SetPoint("LEFT", input, "RIGHT", 6, 0)
+    ButtonBar(page, {
+        { "Send to Auctionator", 170, function() sp.SyncAuctionator() end, true },
+    })
+    Note(page, "Bags: point at an item and press your key (Keybindings > AddOns) or type |cff" .. ACCENT_HEX ..
+        "/mu h|r. Target: |cff" .. ACCENT_HEX .. "/mu h 12.5|r = 12g 50s. Auctionator list: |cff" .. ACCENT_HEX .. sp.LIST_NAME .. "|r.")
+
+    local header = Section(page, "Held items")
+    local listTop = page.y
+    local rows = {}
+    local function Money(c) return c and GetMoneyString(math.floor(c + 0.5), true) or "-" end
+
+    local function GetRow(i)
+        if rows[i] then return rows[i] end
+        local row = CreateFrame("Frame", nil, page.body)
+        row:SetHeight(30)
+        Fill(row, { 0, 0, 0, i % 2 == 1 and 0.12 or 0.22 }):SetAllPoints()
+        row.icon = row:CreateTexture(nil, "ARTWORK")
+        row.icon:SetSize(20, 20)
+        row.icon:SetPoint("LEFT", 8, 0)
+        row.name = Text(row, 13)
+        row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
+        row.name:SetWidth(170)
+        row.name:SetWordWrap(false)
+        row.name:SetJustifyH("LEFT")
+        row.del = FlatButton(row, "X", 26, function()
+            if row.id then sp.Toggle(row.id) end
+        end)
+        row.del:SetHeight(22)
+        row.del:SetPoint("RIGHT", -8, 0)
+        row.target = Input(row, 70, "target", function(text)
+            if row.id then sp.SetTarget(row.id, sp.ParseMoney(text)) end
+            row.target:ClearFocus()
+        end)
+        row.target:SetHeight(22)
+        row.target:SetPoint("RIGHT", row.del, "LEFT", -6, 0)
+        row.prices = Text(row, 11, T.muted)
+        row.prices:SetPoint("LEFT", row.name, "RIGHT", 8, 0)
+        row.prices:SetPoint("RIGHT", row.target, "LEFT", -8, 0)
+        row.prices:SetJustifyH("RIGHT")
+        row.prices:SetWordWrap(false)
+        rows[i] = row
+        return row
+    end
+
+    function page.RefreshList()
+        if not sp.db then return end
+        local ids = sp.HeldList()
+        header:SetText(("HELD ITEMS  |cff%s%d|r"):format(ACCENT_HEX, #ids))
+        for i, id in ipairs(ids) do
+            local row = GetRow(i)
+            row.id = id
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", PAD, listTop - (i - 1) * 32)
+            row:SetPoint("TOPRIGHT", -PAD, listTop - (i - 1) * 32)
+            local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(id)
+            row.icon:SetTexture(icon or 134400)
+            local quality = C_Item and C_Item.GetItemQualityByID and C_Item.GetItemQualityByID(id)
+            local color = quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+            row.name:SetText(sp.Name(id))
+            if color then row.name:SetTextColor(color.r, color.g, color.b) else row.name:SetTextColor(1, 1, 1) end
+            local cheap, now, avg = sp.IsCheap(id)
+            local snipe = sp.SnipePrice(id)
+            local age = sp.ItemAge(id)
+            local text = (cheap and "|cff40ff60" or "") .. Money(now) .. (cheap and "|r" or "")
+                .. "  |cff777777avg|r " .. Money(avg) .. "  |cff777777snipe|r " .. Money(snipe)
+            if age and age >= 1 then text = text .. "  |cffff9933" .. age .. "d old|r" end
+            row.prices:SetText(text)
+            if not row.target:HasFocus() then
+                local target = sp.Target(id)
+                row.target:SetText(target and tostring(target / 10000) or "")
+            end
+            row:Show()
+        end
+        for i = #ids + 1, #rows do
+            rows[i].id = nil
+            rows[i]:Hide()
+        end
+        page.y = listTop - math.max(1, #ids) * 32
+        page:Finish()
+    end
+    page.refreshers[#page.refreshers + 1] = page.RefreshList
     page:Finish()
 end
 
@@ -1031,6 +1173,10 @@ local COMMANDS = {
     { "/mu w o", "weather settings" },
     { "/mu v", "vendor or AH? item under the mouse" },
     { "/mu v o", "vendor coin settings" },
+    { "/mu h", "hold / release item under the mouse" },
+    { "/mu h 12.5", "target price for it (12g 50s)" },
+    { "/mu h sync", "held items to Auctionator's list" },
+    { "/mu h o", "stockpile settings and list" },
 }
 
 local function BuildHelpPage(page)
@@ -1070,6 +1216,8 @@ local TABS = {
     { group = "BAGS" },
     { key = "vendor", label = "Vendor coin", sub = "Red coin on items the vendor pays more for than the AH.",
         icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", build = BuildVendorPage },
+    { key = "stockpile", label = "Stockpile", sub = "Keep raid materials for later, see cheap prices, snipe them.",
+        icon = "Interface\\Icons\\INV_Misc_PocketWatch_01", module = "Stockpile", build = BuildStockpilePage },
     { group = "WORLD" },
     { key = "weather", label = "Weather", sub = "One click: storms low. Next click: your old weather back.",
         icon = "Interface\\Icons\\Spell_Frost_IceStorm", module = "Weather", build = BuildWeatherPage },
@@ -1244,13 +1392,15 @@ if root.FlagPlates then
     end
 end
 
--- a scan or a measured deposit updates the open vendor page
-if root.VendorCoin then
-    root.VendorCoin.OnChange = function()
-        local page = pages.vendor
+-- a scan, a measured deposit or a hold change updates the open pages
+local function RefreshShopPages()
+    for _, key in ipairs({ "vendor", "stockpile" }) do
+        local page = pages[key]
         if page and page:IsVisible() then page:Refresh() end
     end
 end
+if root.VendorCoin then root.VendorCoin.OnChange = RefreshShopPages end
+if root.Stockpile then root.Stockpile.OnChange = RefreshShopPages end
 
 -- a key press or /mu w updates the open weather page
 if root.Weather then
