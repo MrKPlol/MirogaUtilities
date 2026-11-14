@@ -1,4 +1,4 @@
--- Vendor coin: a red coin in the bottom right corner of every bag item that
+-- Vendor coin: a red coin in the top right corner of every bag item that
 -- brings more at the vendor than on the auction house.
 --
 -- AH side, per unit:  Auctionator price  - cut (5 %)  - effort (3 %)  - deposit
@@ -11,8 +11,8 @@
 -- Every auction costs at least the minimum deposit (1 silver until the
 -- maintenance on Nov 18, then 1 copper), spread over the stack you list.
 --
--- Items on the Stockpile hold list get a green watch instead of the coin.
--- Both marks also show in Auctionator's selling tab (top right there).
+-- Items on the Stockpile hold list get a green watch (top left) instead.
+-- Both marks also show in Auctionator's selling tab.
 --
 -- Bags: Baganator corner widget ("Miroga: vendor beats AH"). Without
 -- Baganator the plain Blizzard bags get the coin directly.
@@ -104,8 +104,11 @@ end
 -- ---------------------------------------------------------------------------
 -- Baganator
 
-local WIDGET_ID = "miroga_vendor_coin"
-local HOLD_ID = "miroga_hold_watch"
+-- new IDs (v1.10.2): Baganator places a widget only the first time it sees
+-- the ID, so the move to the top corners needs fresh ones. The old IDs left
+-- in Baganator's settings are skipped because nobody registers them.
+local WIDGET_ID = "miroga_vendor_coin_tr"
+local HOLD_ID = "miroga_hold_watch_tl"
 local usingBaganator = false
 
 local function RegisterBaganator()
@@ -113,7 +116,7 @@ local function RegisterBaganator()
         return
     end
     usingBaganator = true
-    local function Widget(label, id, want, make)
+    local function Widget(label, id, want, make, corner)
         Baganator.API.RegisterCornerWidget(label, id,
             function(_, details)
                 if not details or not details.itemLink then return false end
@@ -128,10 +131,10 @@ local function RegisterBaganator()
                 make(frame):SetAllPoints()
                 return frame
             end,
-            { corner = "bottom_right", priority = 1 })
+            { corner = corner, priority = 1 })
     end
-    Widget("Miroga: vendor beats AH", WIDGET_ID, "vendor", MakeCoin)
-    Widget("Miroga: hold for later", HOLD_ID, "hold", MakeWatch)
+    Widget("Miroga: vendor beats AH", WIDGET_ID, "vendor", MakeCoin, "top_right")
+    Widget("Miroga: hold for later", HOLD_ID, "hold", MakeWatch, "top_left")
 end
 
 -- ---------------------------------------------------------------------------
@@ -151,11 +154,11 @@ local function UpdateButton(button)
     end
     if mark == "vendor" and not button.MirogaVendorCoin then
         button.MirogaVendorCoin = MakeCoin(button)
-        button.MirogaVendorCoin:SetPoint("BOTTOMRIGHT", -2, 2)
+        button.MirogaVendorCoin:SetPoint("TOPRIGHT", -2, -2)
     end
     if mark == "hold" and not button.MirogaHoldWatch then
         button.MirogaHoldWatch = MakeWatch(button)
-        button.MirogaHoldWatch:SetPoint("BOTTOMRIGHT", -2, 2)
+        button.MirogaHoldWatch:SetPoint("TOPLEFT", 2, -2)
     end
     if button.MirogaVendorCoin then button.MirogaVendorCoin:SetShown(mark == "vendor") end
     if button.MirogaHoldWatch then button.MirogaHoldWatch:SetShown(mark == "hold") end
@@ -185,7 +188,7 @@ end
 
 -- ---------------------------------------------------------------------------
 -- Auctionator's selling tab: its bag view uses AuctionatorGroupsViewItem
--- buttons. The stack count sits bottom right there, so the marks go top right.
+-- buttons. Coin top right, watch top left, as in the bags.
 
 local sellButtons = setmetatable({}, { __mode = "k" })
 
@@ -201,7 +204,7 @@ local function UpdateSellButton(button)
     end
     if mark == "hold" and not button.MirogaHoldWatch then
         button.MirogaHoldWatch = MakeWatch(button)
-        button.MirogaHoldWatch:SetPoint("TOPRIGHT", -2, -2)
+        button.MirogaHoldWatch:SetPoint("TOPLEFT", 2, -2)
     end
     if button.MirogaVendorCoin then button.MirogaVendorCoin:SetShown(mark == "vendor") end
     if button.MirogaHoldWatch then button.MirogaHoldWatch:SetShown(mark == "hold") end

@@ -973,7 +973,7 @@ local function BuildVendorPage(page)
     local function set(key) return function(v) vc.Set(key, v) end end
 
     Section(page, "Vendor coin")
-    ToggleRow(page, "Red coin on bag items", "Bottom right, when the vendor pays more than the AH after its fees.",
+    ToggleRow(page, "Red coin on bag items", "Top right, when the vendor pays more than the AH after its fees. Held items: watch, top left.",
         function() return db().enabled end, set("enabled"))
     ToggleRow(page, "Soulbound items too", "They can't go to the AH anyway, so off keeps the bags calm.",
         function() return db().bound end, set("bound"))
@@ -1016,7 +1016,7 @@ local function BuildVendorPage(page)
             src:SetText("Auctionator")
         end
     end
-    Note(page, "Point at an item and type |cff" .. ACCENT_HEX .. "/mu v|r to see the numbers. In Baganator the coin is a corner widget (Baganator > Icons, bottom right); Auctionator's selling tab shows it top right.")
+    Note(page, "Point at an item and type |cff" .. ACCENT_HEX .. "/mu v|r to see the numbers. In Baganator both are corner widgets: Baganator > Icons, top right and top left.")
     page:Finish()
 end
 
