@@ -1157,6 +1157,26 @@ local function BuildStockpilePage(page)
 end
 
 -- ---------------------------------------------------------------------------
+-- naowh tweaks
+
+local function BuildNaowhPage(page)
+    local nt = root.NaowhTweaks
+    local function db() return nt.db or nt.DEFAULTS end
+    Section(page, "Buffs & Consumables")
+    ToggleRow(page, "Scrolls only in dungeons and raids", "Naowh's scroll reminder stays away in the open world. Food, flasks and elixirs keep Naowh's own rules.",
+        function() return db().scrollsInstanceOnly end, function(v) nt.Set("scrollsInstanceOnly", v) end)
+    local row = Row(page, "Naowh Forever", "Needs Naowh Forever: Combat with its Buffs & Consumables row.")
+    local status = Text(row, 13, ACCENT, MONO ~= nil)
+    status:SetPoint("RIGHT", -14, 0)
+    status:SetJustifyH("RIGHT")
+    page.refreshers[#page.refreshers + 1] = function()
+        status:SetText(nt.HasNaowh() and "found" or "|cffff5050not loaded|r")
+    end
+    Note(page, "Takes effect at the next refresh of Naowh's row (moving, buffing or a zone change).")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
 -- commands
 
 local COMMANDS = {
@@ -1224,6 +1244,9 @@ local TABS = {
         icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", build = BuildVendorPage },
     { key = "stockpile", label = "Stockpile", sub = "Keep raid materials for later, see cheap prices, snipe them.",
         icon = "Interface\\Icons\\INV_Relics_Hourglass", module = "Stockpile", build = BuildStockpilePage },
+    { group = "NAOWH" },
+    { key = "naowh", label = "Naowh tweaks", sub = "Small changes to Naowh Forever, without touching its files.",
+        icon = "Interface\\Icons\\INV_Scroll_03", module = "NaowhTweaks", build = BuildNaowhPage },
     { group = "WORLD" },
     { key = "weather", label = "Weather", sub = "One click: storms low. Next click: your old weather back.",
         icon = "Interface\\Icons\\Spell_Frost_IceStorm", module = "Weather", build = BuildWeatherPage },
