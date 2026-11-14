@@ -1,7 +1,8 @@
 -- Vendor coin: a red coin in the bottom right corner of every bag item that
 -- brings more at the vendor than on the auction house.
 --
--- AH side, per unit:  Auctionator price  - cut (5 %)  - deposit (optional)
+-- AH side, per unit:  Auctionator price  - cut (5 %)  - effort (3 %)  - deposit
+-- Effort is your own work for listing and relisting, on top of the cut.
 -- The deposit only stays with the AH if the auction does not sell, so it is a
 -- switch: on = count one failed listing (careful), off = the item sells.
 -- Forever works the deposit out on the server. While the AH is open the
@@ -18,7 +19,7 @@ local CALLER = "MirogaUtilities"
 local GUESS_RATE = 0.15
 vc.DURATIONS = { { 1, "2 hours" }, { 2, "8 hours" }, { 3, "24 hours" } }
 vc.DEFAULTS = {
-    enabled = true, cut = 5, deposit = true, duration = 3,
+    enabled = true, cut = 5, effort = 3, deposit = true, duration = 3,
     bound = false, rates = {},
 }
 
@@ -50,7 +51,7 @@ function vc.Evaluate(itemLink)
     local ok, ah = pcall(Auctionator.API.v1.GetAuctionPriceByItemLink, CALLER, itemLink)
     if not ok or not ah or ah <= 0 then return false end
     local db = vc.db or vc.DEFAULTS
-    local net = ah * (1 - db.cut / 100)
+    local net = ah * (1 - (db.cut + (db.effort or 0)) / 100)
     local deposit = 0
     if db.deposit then deposit = sellPrice * vc.Rate() end
     net = net - deposit
@@ -239,7 +240,7 @@ function vc.Explain(itemLink)
         root.Say(itemLink .. ": no vendor price or no AH price.")
     else
         local money = function(c) return GetMoneyString(math.max(0, math.floor(c + 0.5)), true) end
-        root.Say(("%s: vendor %s, AH %s, after cut%s %s -> |cff%s%s|r"):format(
+        root.Say(("%s: vendor %s, AH %s, after cut + effort%s %s -> |cff%s%s|r"):format(
             itemLink, money(vendor), money(ah),
             deposit > 0 and " + deposit" or "", money(net),
             mark and "ff3030" or root.ACCENT_HEX, mark and "vendor" or "AH"))

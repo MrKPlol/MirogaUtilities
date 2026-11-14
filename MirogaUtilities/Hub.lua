@@ -981,6 +981,8 @@ local function BuildVendorPage(page)
     Section(page, "Auction house fees")
     SliderRow(page, "AH cut", "Taken from every sale. 5 % at the faction AH, 15 % at a neutral one.",
         0, 15, 1, function() return db().cut end, set("cut"), function(v) return v .. " %" end)
+    SliderRow(page, "Your effort", "Extra on top of the cut for the work of listing and relisting.",
+        0, 15, 1, function() return db().effort end, set("effort"), function(v) return v .. " %" end)
     ToggleRow(page, "Count the deposit", "On: as if one listing does not sell and the deposit is lost. Off: it sells.",
         function() return db().deposit end, set("deposit"))
     local choices = {}
