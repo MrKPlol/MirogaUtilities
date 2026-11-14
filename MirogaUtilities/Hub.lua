@@ -973,7 +973,7 @@ local function BuildVendorPage(page)
     local function set(key) return function(v) vc.Set(key, v) end end
 
     Section(page, "Vendor coin")
-    ToggleRow(page, "Red coin on bag items", "Top right, when the vendor pays more than the AH after its fees. Held items: watch, top left.",
+    ToggleRow(page, "Red coin on bag items", "Top right, when the vendor pays more than the AH after its fees. Held items: hourglass, top left.",
         function() return db().enabled end, set("enabled"))
     ToggleRow(page, "Soulbound items too", "They can't go to the AH anyway, so off keeps the bags calm.",
         function() return db().bound end, set("bound"))
@@ -1217,7 +1217,7 @@ local TABS = {
     { key = "vendor", label = "Vendor coin", sub = "Red coin on items the vendor pays more for than the AH.",
         icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", build = BuildVendorPage },
     { key = "stockpile", label = "Stockpile", sub = "Keep raid materials for later, see cheap prices, snipe them.",
-        icon = "Interface\\Icons\\INV_Misc_PocketWatch_01", module = "Stockpile", build = BuildStockpilePage },
+        icon = "Interface\\Icons\\INV_Relics_Hourglass", module = "Stockpile", build = BuildStockpilePage },
     { group = "WORLD" },
     { key = "weather", label = "Weather", sub = "One click: storms low. Next click: your old weather back.",
         icon = "Interface\\Icons\\Spell_Frost_IceStorm", module = "Weather", build = BuildWeatherPage },

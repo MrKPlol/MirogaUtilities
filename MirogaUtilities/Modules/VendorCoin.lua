@@ -11,7 +11,7 @@
 -- Every auction costs at least the minimum deposit (1 silver until the
 -- maintenance on Nov 18, then 1 copper), spread over the stack you list.
 --
--- Items on the Stockpile hold list get a green watch (top left) instead.
+-- Items on the Stockpile hold list get a green hourglass (top left) instead.
 -- Both marks also show in Auctionator's selling tab.
 --
 -- Bags: Baganator corner widget ("Miroga: vendor beats AH"). Without
@@ -92,13 +92,29 @@ local function MakeCoin(parent)
     return coin
 end
 
+-- hourglass for held items: the small UI glyph first, then the hourglass
+-- icon, then the old pocket watch, whichever the client has
+local HOURGLASSES = {
+    { "Interface\\Common\\mini-hourglass", false },
+    { "Interface\\Icons\\INV_Relics_Hourglass", true },
+    { "Interface\\Icons\\INV_Misc_PocketWatch_01", true },
+}
+
 local function MakeWatch(parent)
-    local watch = parent:CreateTexture(nil, "OVERLAY", nil, 7)
-    watch:SetTexture("Interface\\Icons\\INV_Misc_PocketWatch_01")
-    watch:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    watch:SetVertexColor(0.55, 1, 0.55)
-    watch:SetSize(14, 14)
-    return watch
+    local glass = parent:CreateTexture(nil, "OVERLAY", nil, 7)
+    for _, choice in ipairs(HOURGLASSES) do
+        if glass:SetTexture(choice[1]) ~= false then
+            if choice[2] then
+                glass:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                glass:SetVertexColor(0.55, 1, 0.55)
+            else
+                glass:SetVertexColor(0.3, 1, 0.3)
+            end
+            break
+        end
+    end
+    glass:SetSize(14, 14)
+    return glass
 end
 
 -- ---------------------------------------------------------------------------

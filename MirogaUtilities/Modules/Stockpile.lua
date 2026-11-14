@@ -2,7 +2,7 @@
 --
 -- * Hold list: your own items (/mu h on the item under the mouse, or the
 --   hub) plus an optional preset of raid materials. Held items get a green
---   watch in the bags instead of the red vendor coin.
+--   hourglass in the bags instead of the red vendor coin.
 -- * Cheap hint: the tooltip says when today's AH price is far below the
 --   average of the days before (Auctionator's price history).
 -- * Snipe: every held item goes into the Auctionator shopping list
