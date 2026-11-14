@@ -26,7 +26,23 @@ vc.DURATIONS = { { 1, "2 hours" }, { 2, "8 hours" }, { 3, "24 hours" } }
 vc.DEFAULTS = {
     enabled = true, cut = 5, effort = 3, deposit = true, duration = 3,
     bound = false, rates = {}, minDeposit = 100,
+    coinCorner = "TOPRIGHT", holdCorner = "TOPLEFT",
 }
+
+-- the four corners: frame point, offset, Baganator's corner name
+vc.CORNERS = {
+    { "TOPLEFT", "Top left", 2, -2, "top_left", "tl" },
+    { "TOPRIGHT", "Top right", -2, -2, "top_right", "tr" },
+    { "BOTTOMLEFT", "Bottom left", 2, 2, "bottom_left", "bl" },
+    { "BOTTOMRIGHT", "Bottom right", -2, 2, "bottom_right", "br" },
+}
+local CORNER = {}
+for _, c in ipairs(vc.CORNERS) do CORNER[c[1]] = c end
+
+local function CornerOf(key)
+    local db = vc.db or vc.DEFAULTS
+    return CORNER[db[key]] and db[key] or vc.DEFAULTS[key]
+end
 
 local GetItemInfo = C_Item and C_Item.GetItemInfo or GetItemInfo
 
@@ -120,11 +136,11 @@ end
 -- ---------------------------------------------------------------------------
 -- Baganator
 
--- new IDs (v1.10.2): Baganator places a widget only the first time it sees
--- the ID, so the move to the top corners needs fresh ones. The old IDs left
--- in Baganator's settings are skipped because nobody registers them.
-local WIDGET_ID = "miroga_vendor_coin_tr"
-local HOLD_ID = "miroga_hold_watch_tl"
+-- Baganator puts a widget in its corner only the first time it sees the ID
+-- and has no API to move it. So each mark is registered four times, one ID
+-- per corner (miroga_vendor_coin_tr, ..._tl, ...), and only the one in the
+-- corner chosen in the hub shows. IDs from older versions are skipped by
+-- Baganator because nobody registers them any more.
 local usingBaganator = false
 
 local function RegisterBaganator()
@@ -132,9 +148,10 @@ local function RegisterBaganator()
         return
     end
     usingBaganator = true
-    local function Widget(label, id, want, make, corner)
+    local function Widget(label, id, want, make, corner, key)
         Baganator.API.RegisterCornerWidget(label, id,
             function(_, details)
+                if CornerOf(key) ~= corner[1] then return false end
                 if not details or not details.itemLink then return false end
                 local mark = Mark(details.itemLink, details.isBound, details.itemCount)
                 if mark == nil then return nil end
@@ -147,16 +164,39 @@ local function RegisterBaganator()
                 make(frame):SetAllPoints()
                 return frame
             end,
-            { corner = corner, priority = 1 })
+            { corner = corner[5], priority = 1 })
     end
-    Widget("Miroga: vendor beats AH", WIDGET_ID, "vendor", MakeCoin, "top_right")
-    Widget("Miroga: hold for later", HOLD_ID, "hold", MakeWatch, "top_left")
+    for _, c in ipairs(vc.CORNERS) do
+        Widget("Miroga: vendor coin (" .. strlower(c[2]) .. ")", "miroga_vendor_coin_" .. c[6],
+            "vendor", MakeCoin, c, "coinCorner")
+        Widget("Miroga: hold hourglass (" .. strlower(c[2]) .. ")", "miroga_hold_watch_" .. c[6],
+            "hold", MakeWatch, c, "holdCorner")
+    end
 end
 
 -- ---------------------------------------------------------------------------
 -- Blizzard bags (only when Baganator is not there)
 
 local hooked = {}
+
+-- shows the right mark on a plain button, in the chosen corner
+local function Place(button, mark)
+    if mark == "vendor" and not button.MirogaVendorCoin then button.MirogaVendorCoin = MakeCoin(button) end
+    if mark == "hold" and not button.MirogaHoldWatch then button.MirogaHoldWatch = MakeWatch(button) end
+    local coin, glass = button.MirogaVendorCoin, button.MirogaHoldWatch
+    if coin then
+        local c = CORNER[CornerOf("coinCorner")]
+        coin:ClearAllPoints()
+        coin:SetPoint(c[1], c[3], c[4])
+        coin:SetShown(mark == "vendor")
+    end
+    if glass then
+        local c = CORNER[CornerOf("holdCorner")]
+        glass:ClearAllPoints()
+        glass:SetPoint(c[1], c[3], c[4])
+        glass:SetShown(mark == "hold")
+    end
+end
 
 local function UpdateButton(button)
     if not button or not button.GetBagID then return end
@@ -168,16 +208,7 @@ local function UpdateButton(button)
             mark = Mark(info.hyperlink, info.isBound, info.stackCount) or false
         end
     end
-    if mark == "vendor" and not button.MirogaVendorCoin then
-        button.MirogaVendorCoin = MakeCoin(button)
-        button.MirogaVendorCoin:SetPoint("TOPRIGHT", -2, -2)
-    end
-    if mark == "hold" and not button.MirogaHoldWatch then
-        button.MirogaHoldWatch = MakeWatch(button)
-        button.MirogaHoldWatch:SetPoint("TOPLEFT", 2, -2)
-    end
-    if button.MirogaVendorCoin then button.MirogaVendorCoin:SetShown(mark == "vendor") end
-    if button.MirogaHoldWatch then button.MirogaHoldWatch:SetShown(mark == "hold") end
+    Place(button, mark)
 end
 
 local function UpdateFrame(frame)
@@ -204,7 +235,7 @@ end
 
 -- ---------------------------------------------------------------------------
 -- Auctionator's selling tab: its bag view uses AuctionatorGroupsViewItem
--- buttons. Coin top right, watch top left, as in the bags.
+-- buttons. Same corners as in the bags.
 
 local sellButtons = setmetatable({}, { __mode = "k" })
 
@@ -214,16 +245,7 @@ local function UpdateSellButton(button)
     if info and info.itemLink then
         mark = Mark(info.itemLink, false, info.itemCount) or false
     end
-    if mark == "vendor" and not button.MirogaVendorCoin then
-        button.MirogaVendorCoin = MakeCoin(button)
-        button.MirogaVendorCoin:SetPoint("TOPRIGHT", -2, -2)
-    end
-    if mark == "hold" and not button.MirogaHoldWatch then
-        button.MirogaHoldWatch = MakeWatch(button)
-        button.MirogaHoldWatch:SetPoint("TOPLEFT", 2, -2)
-    end
-    if button.MirogaVendorCoin then button.MirogaVendorCoin:SetShown(mark == "vendor") end
-    if button.MirogaHoldWatch then button.MirogaHoldWatch:SetShown(mark == "hold") end
+    Place(button, mark)
 end
 
 local auctionatorHooked = false

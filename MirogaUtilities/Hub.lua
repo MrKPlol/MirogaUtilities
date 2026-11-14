@@ -973,10 +973,16 @@ local function BuildVendorPage(page)
     local function set(key) return function(v) vc.Set(key, v) end end
 
     Section(page, "Vendor coin")
-    ToggleRow(page, "Red coin on bag items", "Top right, when the vendor pays more than the AH after its fees. Held items: hourglass, top left.",
+    ToggleRow(page, "Red coin on bag items", "When the vendor pays more than the AH after its fees. Held items get the hourglass.",
         function() return db().enabled end, set("enabled"))
     ToggleRow(page, "Soulbound items too", "They can't go to the AH anyway, so off keeps the bags calm.",
         function() return db().bound end, set("bound"))
+    local corners = {}
+    for _, c in ipairs(vc.CORNERS) do corners[#corners + 1] = { value = c[1], text = c[2] } end
+    MenuRow(page, "Coin corner", "Where the red coin sits on the item. Bags, Baganator and Auctionator.",
+        corners, function() return db().coinCorner end, set("coinCorner"))
+    MenuRow(page, "Hourglass corner", "Where the green hourglass of held items sits.",
+        corners, function() return db().holdCorner end, set("holdCorner"))
 
     Section(page, "Auction house fees")
     SliderRow(page, "AH cut", "Taken from every sale. 5 % at the faction AH, 15 % at a neutral one.",
@@ -1016,7 +1022,7 @@ local function BuildVendorPage(page)
             src:SetText("Auctionator")
         end
     end
-    Note(page, "Point at an item and type |cff" .. ACCENT_HEX .. "/mu v|r to see the numbers. In Baganator both are corner widgets: Baganator > Icons, top right and top left.")
+    Note(page, "Point at an item and type |cff" .. ACCENT_HEX .. "/mu v|r to see the numbers. Baganator shows them as corner widgets 'Miroga: ...' under Icons; the corner set here wins.")
     page:Finish()
 end
 
