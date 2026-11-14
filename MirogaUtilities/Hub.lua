@@ -1016,7 +1016,7 @@ local function BuildVendorPage(page)
             src:SetText("Auctionator")
         end
     end
-    Note(page, "Point at an item and type |cff" .. ACCENT_HEX .. "/mu v|r to see the numbers. In Baganator the coin is a corner widget: Baganator > Icons, bottom right.")
+    Note(page, "Point at an item and type |cff" .. ACCENT_HEX .. "/mu v|r to see the numbers. In Baganator the coin is a corner widget (Baganator > Icons, bottom right); Auctionator's selling tab shows it top right.")
     page:Finish()
 end
 

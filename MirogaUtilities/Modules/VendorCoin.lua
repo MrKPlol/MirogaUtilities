@@ -12,6 +12,7 @@
 -- maintenance on Nov 18, then 1 copper), spread over the stack you list.
 --
 -- Items on the Stockpile hold list get a green watch instead of the coin.
+-- Both marks also show in Auctionator's selling tab (top right there).
 --
 -- Bags: Baganator corner widget ("Miroga: vendor beats AH"). Without
 -- Baganator the plain Blizzard bags get the coin directly.
@@ -183,6 +184,42 @@ local function HookBlizzard()
 end
 
 -- ---------------------------------------------------------------------------
+-- Auctionator's selling tab: its bag view uses AuctionatorGroupsViewItem
+-- buttons. The stack count sits bottom right there, so the marks go top right.
+
+local sellButtons = setmetatable({}, { __mode = "k" })
+
+local function UpdateSellButton(button)
+    local info = button.itemInfo
+    local mark = false
+    if info and info.itemLink then
+        mark = Mark(info.itemLink, false, info.itemCount) or false
+    end
+    if mark == "vendor" and not button.MirogaVendorCoin then
+        button.MirogaVendorCoin = MakeCoin(button)
+        button.MirogaVendorCoin:SetPoint("TOPRIGHT", -2, -2)
+    end
+    if mark == "hold" and not button.MirogaHoldWatch then
+        button.MirogaHoldWatch = MakeWatch(button)
+        button.MirogaHoldWatch:SetPoint("TOPRIGHT", -2, -2)
+    end
+    if button.MirogaVendorCoin then button.MirogaVendorCoin:SetShown(mark == "vendor") end
+    if button.MirogaHoldWatch then button.MirogaHoldWatch:SetShown(mark == "hold") end
+end
+
+local auctionatorHooked = false
+local function HookAuctionator()
+    if auctionatorHooked or not AuctionatorGroupsViewItemMixin then return end
+    auctionatorHooked = true
+    -- buttons get the mixin's functions when they are made (first AH visit),
+    -- so hooking the mixin at login reaches all of them
+    hooksecurefunc(AuctionatorGroupsViewItemMixin, "SetItemInfo", function(button)
+        sellButtons[button] = true
+        UpdateSellButton(button)
+    end)
+end
+
+-- ---------------------------------------------------------------------------
 -- refresh after a scan or a settings change
 
 function vc.Refresh()
@@ -192,6 +229,9 @@ function vc.Refresh()
         for frame in pairs(hooked) do
             if frame:IsShown() then UpdateFrame(frame) end
         end
+    end
+    for button in pairs(sellButtons) do
+        if button:IsVisible() then UpdateSellButton(button) end
     end
     if vc.OnChange then vc.OnChange() end
 end
@@ -335,6 +375,7 @@ events:SetScript("OnEvent", function(self, event, addon)
     elseif event == "PLAYER_LOGIN" then
         RegisterBaganator()
         HookBlizzard()
+        HookAuctionator()
         if Auctionator_OK() and Auctionator.API.v1.RegisterForDBUpdate then
             pcall(Auctionator.API.v1.RegisterForDBUpdate, CALLER, vc.Refresh)
         end
