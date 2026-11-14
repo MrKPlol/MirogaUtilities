@@ -965,6 +965,48 @@ local function BuildQuietPage(page)
 end
 
 -- ---------------------------------------------------------------------------
+-- vendor coin
+
+local function BuildVendorPage(page)
+    local vc = root.VendorCoin
+    local function db() return vc.db or vc.DEFAULTS end
+    local function set(key) return function(v) vc.Set(key, v) end end
+
+    Section(page, "Vendor coin")
+    ToggleRow(page, "Red coin on bag items", "Bottom right, when the vendor pays more than the AH after its fees.",
+        function() return db().enabled end, set("enabled"))
+    ToggleRow(page, "Soulbound items too", "They can't go to the AH anyway, so off keeps the bags calm.",
+        function() return db().bound end, set("bound"))
+
+    Section(page, "Auction house fees")
+    SliderRow(page, "AH cut", "Taken from every sale. 5 % at the faction AH, 15 % at a neutral one.",
+        0, 15, 1, function() return db().cut end, set("cut"), function(v) return v .. " %" end)
+    ToggleRow(page, "Count the deposit", "On: as if one listing does not sell and the deposit is lost. Off: it sells.",
+        function() return db().deposit end, set("deposit"))
+    local choices = {}
+    for _, d in ipairs(vc.DURATIONS) do choices[#choices + 1] = { value = d[1], text = d[2] } end
+    MenuRow(page, "Listing time", "The deposit grows with the listing time.",
+        choices, function() return db().duration end, set("duration"))
+
+    Section(page, "Status")
+    local row = Row(page, "Deposit rate", "Share of the vendor price. Measured each time the AH opens.")
+    local status = Text(row, 13, ACCENT, MONO ~= nil)
+    status:SetPoint("RIGHT", -14, 0)
+    status:SetJustifyH("RIGHT")
+    local source = Row(page, "Prices from", "Auctionator's scan database. Scan at the AH to fill it.")
+    local src = Text(source, 13, ACCENT, MONO ~= nil)
+    src:SetPoint("RIGHT", -14, 0)
+    src:SetJustifyH("RIGHT")
+    page.refreshers[#page.refreshers + 1] = function()
+        local rate, measured = vc.Rate()
+        status:SetText(("%.1f %%"):format(rate * 100) .. (measured and "" or "|cff888888  (guess, open the AH once)|r"))
+        src:SetText(vc.HasAuctionator() and "Auctionator" or "|cffff5050Auctionator missing|r")
+    end
+    Note(page, "Point at an item and type |cff" .. ACCENT_HEX .. "/mu v|r to see the numbers. In Baganator the coin is a corner widget: Baganator > Icons, bottom right.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
 -- commands
 
 local COMMANDS = {
@@ -985,6 +1027,8 @@ local COMMANDS = {
     { "/mu w", "weather low / back" },
     { "/mu q", "show the hidden login lines" },
     { "/mu w o", "weather settings" },
+    { "/mu v", "vendor or AH? item under the mouse" },
+    { "/mu v o", "vendor coin settings" },
 }
 
 local function BuildHelpPage(page)
@@ -1021,6 +1065,9 @@ local TABS = {
     { group = "CHAT" },
     { key = "quiet", label = "Login quiet", sub = "No addon spam in the chat after login or /reload.",
         icon = "Interface\\Icons\\INV_Misc_Note_02", module = "LoginQuiet", build = BuildQuietPage },
+    { group = "BAGS" },
+    { key = "vendor", label = "Vendor coin", sub = "Red coin on items the vendor pays more for than the AH.",
+        icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", build = BuildVendorPage },
     { group = "WORLD" },
     { key = "weather", label = "Weather", sub = "One click: storms low. Next click: your old weather back.",
         icon = "Interface\\Icons\\Spell_Frost_IceStorm", module = "Weather", build = BuildWeatherPage },
@@ -1192,6 +1239,14 @@ if root.FlagPlates then
     fp.RefreshUI = function()
         local page = pages.players
         if page and page:IsVisible() and page.RefreshList then page.RefreshList() end
+    end
+end
+
+-- a scan or a measured deposit updates the open vendor page
+if root.VendorCoin then
+    root.VendorCoin.OnChange = function()
+        local page = pages.vendor
+        if page and page:IsVisible() then page:Refresh() end
     end
 end
 

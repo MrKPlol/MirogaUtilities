@@ -65,10 +65,13 @@ SlashCmdList.MIROGAUTILITIES = function(msg)
     elseif command == "w" or command == "weather" then
         if not root.Weather then return end
         if rest == "" then root.Weather.Toggle() else Open("weather") end
+    elseif command == "v" or command == "vendor" then
+        if not root.VendorCoin then return end
+        if rest == "" then root.VendorCoin.Explain() else Open("vendor") end
     elseif PAGES[command] then
         Open(PAGES[command])
     else
-        Say("/mu (window), /mu t (flag target), /mu f (players), /mu c (combat text), /mu r (auto mark), /mu w (weather low/back), /mu q (hidden login lines), /mu m (move boxes), /mu p (preview)")
+        Say("/mu (window), /mu t (flag target), /mu f (players), /mu c (combat text), /mu r (auto mark), /mu w (weather low/back), /mu v (vendor or AH), /mu q (hidden login lines), /mu m (move boxes), /mu p (preview)")
     end
 end
 
