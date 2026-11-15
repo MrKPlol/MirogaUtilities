@@ -176,6 +176,16 @@ function vc.Details(a)
     return lines
 end
 
+-- tooltip: one line, two for amber below the break-even.
+--   left = what to do with what you carry, right = per unit vendor vs AH
+local GRAY, RED, AMBER, GREEN = "|cffaaaaaa", "|cffff3030", "|cffff9e14", "|cff40ff60"
+
+local function Coin(c)
+    c = math.floor((c or 0) + 0.5)
+    if c <= 0 then return "0" end
+    return GetMoneyString(c, true)
+end
+
 local function AddTooltip(tooltip)
     local db = vc.db
     if not db or not db.enabled or not db.tooltip or not tooltip or not tooltip.GetItem then return end
@@ -185,8 +195,19 @@ local function AddTooltip(tooltip)
     if mark ~= "vendor" and mark ~= "amount" then return end
     local a = vc.Analyze(link)
     if not a then return end
-    tooltip:AddLine("Miroga: " .. vc.Summary(a))
-    for _, line in ipairs(vc.Details(a)) do tooltip:AddLine("|cffaaaaaa" .. line .. "|r") end
+    local vendorFirst = GRAY .. "Vendor|r " .. Coin(a.vendor) .. GRAY .. "  AH|r " .. Coin(a.netHave)
+    if a.verdict == "vendor" then
+        -- red holds even for a full stack, so show that best case
+        tooltip:AddDoubleLine("Miroga: " .. RED .. "sell to vendor|r",
+            GRAY .. "Vendor|r " .. Coin(a.vendor) .. GRAY .. "  AH|r " .. Coin(a.netFull))
+    elseif a.vendorWinsHave then
+        tooltip:AddDoubleLine("Miroga: " .. AMBER .. "vendor for now|r", vendorFirst)
+        tooltip:AddLine(("%sAH pays more from %d on (you have %d) -> %s each|r"):format(
+            GRAY, a.breakEven, a.have, Coin(a.netFull)))
+    else
+        tooltip:AddDoubleLine("Miroga: " .. GREEN .. "AH|r" .. GRAY .. " (from " .. a.breakEven .. ")|r",
+            GRAY .. "AH|r " .. Coin(a.netHave) .. GRAY .. "  Vendor|r " .. Coin(a.vendor))
+    end
     tooltip:Show()
 end
 
