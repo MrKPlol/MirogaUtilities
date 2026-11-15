@@ -977,6 +977,10 @@ local function BuildVendorPage(page)
         function() return db().enabled end, set("enabled"))
     ToggleRow(page, "Soulbound items too", "They can't go to the AH anyway, so off keeps the bags calm.",
         function() return db().bound end, set("bound"))
+    ToggleRow(page, "Amber coin when the amount decides", "Vendor wins for one, AH for a full stack. The tooltip says from how many on.",
+        function() return db().amber end, set("amber"))
+    ToggleRow(page, "Coin details in the tooltip", "Prices per unit, the break-even amount and what you carry.",
+        function() return db().tooltip end, set("tooltip"))
     local corners = {}
     for _, c in ipairs(vc.CORNERS) do corners[#corners + 1] = { value = c[1], text = c[2] } end
     MenuRow(page, "Coin corner", "Where the red coin sits on the item. Bags, Baganator and Auctionator.",
@@ -995,7 +999,7 @@ local function BuildVendorPage(page)
     for _, d in ipairs(vc.DURATIONS) do choices[#choices + 1] = { value = d[1], text = d[2] } end
     MenuRow(page, "Listing time", "The deposit grows with the listing time.",
         choices, function() return db().duration end, set("duration"))
-    MenuRow(page, "Minimum deposit", "Per auction, shared by the stack. Forever: 1 silver, 1 copper after Nov 18.",
+    MenuRow(page, "Minimum deposit", "Per auction, shared by a full stack of the item. Forever: 1 silver, 1 copper after Nov 18.",
         { { value = 100, text = "1 silver" }, { value = 1, text = "1 copper" } },
         function() return db().minDeposit end, set("minDeposit"))
 
