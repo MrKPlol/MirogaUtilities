@@ -7,7 +7,8 @@ function CreateFrame()
     return { RegisterEvent = function() end, UnregisterEvent = function() end,
         SetScript = function(_, _, fn) handler = fn end }
 end
-WorldFrame = { HookScript = function(_, _, fn) clickFn = fn end }
+function CameraOrSelectOrMoveStart() end
+function hooksecurefunc(name, fn) if name == "CameraOrSelectOrMoveStart" then clickFn = fn end end
 local now, combat, group = 1000, false, false
 function time() return now end
 function InCombatLockdown() return combat end

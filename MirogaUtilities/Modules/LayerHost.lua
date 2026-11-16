@@ -9,7 +9,7 @@
 -- (hostForced) and no 4 min lock runs. Then it stays on at the next login,
 -- until you turn it off again.
 --
--- The off goes through /ls off at your first mouse click after the login:
+-- The off goes through /ls off at your first click or movement key after the login:
 -- LayerSwap may join or leave a chat channel there, which the game allows
 -- only inside a real click. Nothing is changed in LayerSwap's files.
 local _, root = ...
@@ -66,12 +66,19 @@ function lh.Set(key, value)
     if lh.db then lh.db[key] = value end
 end
 
+-- No mouse scripts on WorldFrame or UIParent: a mouse handler there turns
+-- on mouse input for a full-screen frame and swallows every click. Instead
+-- the game's own click and movement bindings are hooked; they run inside
+-- the real key press or click, which is what LayerSwap's channel join needs.
 local hooked = false
 local function Hook()
-    if hooked or not WorldFrame then return end
+    if hooked or not hooksecurefunc then return end
     hooked = true
-    WorldFrame:HookScript("OnMouseDown", function() if lh.armed then lh.TryOff() end end)
-    if UIParent then UIParent:HookScript("OnMouseDown", function() if lh.armed then lh.TryOff() end end) end
+    local function try() if lh.armed then lh.TryOff() end end
+    for _, name in ipairs({ "CameraOrSelectOrMoveStart", "TurnOrActionStart", "MoveForwardStart",
+        "MoveBackwardStart", "StrafeLeftStart", "StrafeRightStart", "JumpOrAscendStart" }) do
+        if type(_G[name]) == "function" then hooksecurefunc(name, try) end
+    end
 end
 
 local events = CreateFrame("Frame")
