@@ -2,7 +2,7 @@
 ## Title: Miroga Utilities
 ## Notes: Personal Forever tools: druid powershift without the action bar bug, combat text, flagged nameplates, auto raid marks, weather switch, quiet login, vendor coin, stockpile, Naowh tweaks, an update merge for Naowh profiles and LayerSwap host off by default. Every module can be turned off on the home page.
 ## Author: Karl
-## Version: 1.15.2
+## Version: 1.16.0
 ## IconTexture: Interface\Icons\Ability_Druid_CatForm
 ## AddonCompartmentFunc: MirogaUtilities_OnCompartmentClick
 ## SavedVariables: KPCombatTextDB, KPFlagPlatesDB, MirogaAutoMarkDB, MirogaWeatherDB, MirogaUtilitiesDB, MirogaVendorDB, MirogaStockpileDB, MirogaUpdateMergeDB
@@ -21,6 +21,7 @@ Modules/VendorCoin.lua
 Modules/Stockpile.lua
 Modules/NaowhTweaks.lua
 Modules/LayerHost.lua
+Modules/QuestPOI.lua
 Modules/UpdateMerge.lua
 Modules/UpdateMergeSeed.lua
 Hub.lua
