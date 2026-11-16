@@ -129,8 +129,6 @@ SlashCmdList.MIROGAUTILITIES = function(msg)
     elseif command == "v" or command == "vendor" then
         if not root.VendorCoin then return end
         if rest == "" then root.VendorCoin.Explain() else Open("vendor") end
-    elseif command == "poi" then
-        if root.QuestPOI then root.QuestPOI.Toggle() end
     elseif PAGES[command] then
         Open(PAGES[command])
     else
