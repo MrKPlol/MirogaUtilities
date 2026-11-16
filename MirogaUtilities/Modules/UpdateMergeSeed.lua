@@ -4,6 +4,14 @@ local _, root = ...
 local um = root.UpdateMerge
 local SEED = {
     eui = {
+        "globals\031tooltipClassLineColor",
+        "globals\031tooltipFactionColor",
+        "globals\031tooltipGuildmateColor",
+        "globals\031tooltipLevelColor",
+        "globals\031tooltipPlayerTitles",
+        "globals\031tooltipShowGuildRank",
+        "globals\031tooltipShowTarget",
+        "globals\031blizzWindowSkinStyles\031stable",
         "profile\031addons\031EllesmereUIActionBars\031bars\031Bar2\031barVisibility",
         "profile\031addons\031EllesmereUIActionBars\031bars\031Bar2\031mouseoverAlpha",
         "profile\031addons\031EllesmereUIActionBars\031bars\031Bar2\031mouseoverEnabled",
@@ -69,9 +77,11 @@ local SEED = {
     },
 }
 
+local SEED_VERSION = 2
+
 function um.Seed(db)
-    if db.seeded then return end
-    db.seeded = true
+    if db.seeded == SEED_VERSION then return end
+    db.seeded = SEED_VERSION
     for id, paths in pairs(SEED) do
         local keep = db.keep[id] or {}
         db.keep[id] = keep

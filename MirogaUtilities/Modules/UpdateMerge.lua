@@ -16,6 +16,24 @@ local um = {}
 root.UpdateMerge = um
 
 local SEP = "\31"
+
+-- EllesmereUI keeps some settings outside the profile (tooltips, window
+-- skins, unlock anchors), and NaowhUI imports those too. Everything at the
+-- top of EllesmereUIDB counts, except profiles, characters and caches.
+local EUI_NOT_GLOBAL = {
+    profiles = true, spellAssignments = true, ppUIScale = true, chars = true,
+    cdmCachedBarSizes = true, lastSpecByChar = true, goldLedger = true, _migrations = true,
+    lastLoginVersion = true, profileOrder = true, activeProfile = true, dismissedConflicts = true,
+}
+
+local function EUIGlobals()
+    local out = {}
+    for k, v in pairs(EllesmereUIDB) do
+        if type(k) == "string" and not EUI_NOT_GLOBAL[k] and k:sub(1, 1) ~= "_" then out[k] = v end
+    end
+    return out
+end
+
 local SOURCES = {
     {
         id = "eui", label = "EllesmereUI", record = "EllesmereUI",
@@ -27,11 +45,13 @@ local SOURCES = {
                 profile = type(db.profiles) == "table" and db.profiles[name] or nil,
                 spells = type(sa) == "table" and sa[name] or nil,
                 scale = db.ppUIScale,
+                globals = EUIGlobals(),
             }
         end,
         container = function(name, part)
             local db = EllesmereUIDB
             if part == "scale" then return db, "ppUIScale" end
+            if part == "globals" then return db, nil end
             if part == "profile" then
                 db.profiles = db.profiles or {}
                 return db.profiles, name
@@ -326,10 +346,15 @@ end
 
 local function Write(src, name, keys, value)
     local holder, key = src.container(name, keys[1])
-    if #keys == 1 then holder[key] = Copy(value); return end
+    local first = 2
+    if key == nil then           -- the part is the holder itself (EUI globals)
+        if #keys < 2 then return end
+        key, first = keys[2], 3
+    end
+    if #keys == first - 1 then holder[key] = Copy(value); return end
     if type(holder[key]) ~= "table" then holder[key] = {} end
     local t = holder[key]
-    for i = 2, #keys - 1 do
+    for i = first, #keys - 1 do
         local k = keys[i]
         if type(t[k]) ~= "table" then
             if value == nil then return end
@@ -394,7 +419,7 @@ local function Pretty(k)
     return (tostring(k):gsub("^EllesmereUI(%u)", "%1"))
 end
 
-local PART_LABEL = { spells = "CDM spells", scale = "UI scale" }
+local PART_LABEL = { spells = "CDM spells", scale = "UI scale", globals = "General" }
 
 function um.Label(keys)
     local parts = {}

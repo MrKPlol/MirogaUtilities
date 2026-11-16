@@ -1171,6 +1171,9 @@ local function BuildNaowhPage(page)
         function() return db().scrollsInstanceOnly end, function(v) nt.Set("scrollsInstanceOnly", v) end)
     ToggleRow(page, "Buff drinks only in dungeons and raids", "Kreeg's Stout, Rumsey Rum, Juju, Zanza and the other buff items stay away in the open world.",
         function() return db().drinksInstanceOnly end, function(v) nt.Set("drinksInstanceOnly", v) end)
+    Section(page, "RestedXP")
+    ToggleRow(page, "/rxp hide hides Naowh's guide window too", "With Naowh's RXP skin, /rxp hide left its list on screen. Now it goes and comes back with /rxp show.",
+        function() return db().rxpHide end, function(v) nt.Set("rxpHide", v) end)
     local row = Row(page, "Naowh Forever", "Needs Naowh Forever: Combat with its Buffs & Consumables row.")
     local status = Text(row, 13, ACCENT, MONO ~= nil)
     status:SetPoint("RIGHT", -14, 0)
@@ -1430,6 +1433,38 @@ end
 -- hub window
 
 -- ---------------------------------------------------------------------------
+-- LayerSwap host
+
+local function BuildLayerPage(page)
+    local lh = root.LayerHost
+    local function db() return lh.db or lh.DEFAULTS end
+    Section(page, "Host")
+    ToggleRow(page, "Host off after login", "LayerSwap turns Host on at every login. This turns it off at your first click, unless you turned it on yourself.",
+        function() return db().enabled end, function(v) lh.Set("enabled", v) end)
+    local function StatusRow(label, desc, get)
+        local row = Row(page, label, desc)
+        local t = Text(row, 12, ACCENT, MONO ~= nil)
+        t:SetPoint("RIGHT", -14, 0)
+        t:SetJustifyH("RIGHT")
+        page.refreshers[#page.refreshers + 1] = function() t:SetText(get()) end
+    end
+    Section(page, "Status")
+    StatusRow("LayerSwap", nil, function() return lh.Present() and "found" or "|cffff5050not loaded|r" end)
+    StatusRow("Host now", "After a swap of yours LayerSwap keeps it on 4 min, then off by itself.", function()
+        if not lh.Present() then return "-" end
+        local left = lh.LockLeft()
+        if lh.Hosting() and left > 0 then return ("on, %d:%02d after your swap"):format(math.floor(left / 60), left % 60) end
+        return lh.Hosting() and "on" or "off"
+    end)
+    StatusRow("At the next login", "What you leave it at when you log out.", function()
+        if not db().enabled then return "LayerSwap decides (on)" end
+        return db().wantHost and "on (you turned it on)" or "off"
+    end)
+    Note(page, "Turn Host on in LayerSwap (button, /ls host) and it stays on, also after the next login, until you turn it off there.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
 -- home: every module with its switch; a change needs a reload
 
 local function BuildHomePage(page)
@@ -1459,11 +1494,11 @@ local function BuildHomePage(page)
     reload:SetPoint("RIGHT", -12, 0)
     reloadRow:Hide()
     Note(page, "A module that is off does not start at all: no events, no hooks, no memory. Its settings stay saved.")
-    page:Finish()
+    BuildHelpPage(page)   -- the slash commands below the switches
 end
 
 local TABS = {
-    { key = "home", label = "Home", sub = "Turn modules on or off. Everything else is in the groups below.",
+    { key = "home", label = "Home", sub = "Modules on or off, and every slash command.",
         icon = "Interface\\Icons\\Ability_Druid_CatForm", build = BuildHomePage },
     { group = "COMBAT" },
     { key = "text", label = "Combat text", sub = "Damage, heals, buffs and debuffs on you: boxes, font, timing.",
@@ -1490,12 +1525,12 @@ local TABS = {
     { key = "merge", label = "Update merge", sub = "After a Naowh update: OLD or NEW for every setting that changed.",
         icon = "Interface\\Icons\\INV_Misc_Book_09", module = "UpdateMerge", build = BuildMergePage },
     { group = "WORLD & CHAT" },
+    { key = "layer", label = "LayerSwap host", sub = "Host off by default, on only when you turn it on.",
+        icon = "Interface\\Icons\\Spell_Arcane_PortalDalaran", module = "LayerHost", build = BuildLayerPage },
     { key = "weather", label = "Weather", sub = "One click: storms low. Next click: your old weather back.",
         icon = "Interface\\Icons\\Spell_Frost_IceStorm", module = "Weather", build = BuildWeatherPage },
     { key = "quiet", label = "Login quiet", sub = "No addon spam in the chat after login or /reload.",
         icon = "Interface\\Icons\\INV_Misc_Note_02", module = "LoginQuiet", build = BuildQuietPage },
-    { key = "help", label = "Commands", sub = "Everything is one letter after /mu.",
-        icon = "Interface\\Icons\\INV_Misc_Note_01", build = BuildHelpPage },
 }
 
 local hub, current

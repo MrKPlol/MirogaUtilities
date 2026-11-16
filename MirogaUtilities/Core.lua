@@ -25,6 +25,7 @@ root.MODULES = {
     { key = "Stockpile", label = "Stockpile", desc = "Hold raid materials, cheap price hints, snipe alerts." },
     { key = "NaowhTweaks", label = "Naowh tweaks", desc = "Scrolls and buff drinks only in dungeons and raids." },
     { key = "UpdateMerge", label = "Update merge", desc = "After a NaowhUI update: OLD or NEW for every changed setting." },
+    { key = "LayerHost", label = "LayerSwap host", desc = "LayerSwap's Host off after login, unless you turned it on yourself." },
     { key = "Weather", label = "Weather", desc = "One key: storms low, again: your weather back." },
     { key = "LoginQuiet", label = "Login quiet", desc = "No addon spam in the chat after login or reload." },
 }

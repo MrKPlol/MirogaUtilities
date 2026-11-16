@@ -43,5 +43,5 @@ mu("w"); ok(not calls.weather and calls.say and calls.say:find("is off"), "slash
 root.SetModule("Weather", true)
 ok(not root.IsOff("Weather") and MirogaUtilitiesDB.off.Weather == nil, "switch on clears the entry")
 ok(root.Stopped("Weather"), "still stopped until reload")
-ok(#root.MODULES == 10, "ten modules listed")
+ok(#root.MODULES == 11, "eleven modules listed")
 print(n .. " checks, " .. bad .. " failures"); os.exit(bad == 0 and 0 or 1)

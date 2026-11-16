@@ -11,7 +11,7 @@ local _, root = ...
 local nt = {}
 root.NaowhTweaks = nt
 
-nt.DEFAULTS = { scrollsInstanceOnly = true, drinksInstanceOnly = true }
+nt.DEFAULTS = { scrollsInstanceOnly = true, drinksInstanceOnly = true, rxpHide = true }
 
 -- row key -> setting that keeps it to dungeons and raids
 local INSTANCE_ONLY = { scroll = "scrollsInstanceOnly", other = "drinksInstanceOnly" }
@@ -52,9 +52,51 @@ local function Wrap()
     return true
 end
 
+-- ---------------------------------------------------------------------------
+-- RXP: Naowh's guide window (NaowhRXPWindow) replaces RXP's own list, and
+-- /rxp hide only hides RXP's frames (arrow, list). This hides Naowh's window
+-- along with them and brings it back with /rxp show.
+
+local function RXPHidden()
+    local rxp = _G.RXP
+    local p = type(rxp) == "table" and type(rxp.settings) == "table" and rxp.settings.profile
+    return type(p) == "table" and (p.showEnabled == false or p.hideGuideWindow == true) or false
+end
+nt.RXPHidden = RXPHidden
+
+local windowHooked, toggleHooked = false, false
+function nt.SyncRXP()
+    local w = _G.NaowhRXPWindow
+    if not (w and nt.db) then return end
+    if not windowHooked then
+        windowHooked = true
+        w:HookScript("OnShow", function(self)
+            if nt.db and nt.db.rxpHide and RXPHidden() then self:Hide() end
+        end)
+    end
+    if not nt.db.rxpHide then return end
+    if RXPHidden() then
+        if w:IsShown() then w:Hide() end
+    elseif not w:IsShown() and nt.rxpHidByUs then
+        w:Show()
+        local v2 = _G.RXP.v2
+        if type(v2) == "table" and type(v2.UpdateGuideWindow) == "function" then pcall(v2.UpdateGuideWindow, v2) end
+    end
+    nt.rxpHidByUs = RXPHidden()
+end
+
+local function HookRXP()
+    local settings = type(_G.RXP) == "table" and _G.RXP.settings
+    if toggleHooked or type(settings) ~= "table" or type(settings.ToggleActive) ~= "function" then return end
+    toggleHooked = true
+    hooksecurefunc(settings, "ToggleActive", function() C_Timer.After(0, nt.SyncRXP) end)
+end
+nt.HookRXP = HookRXP
+
 function nt.Set(key, value)
     if not nt.db then return end
     nt.db[key] = value
+    if key == "rxpHide" then nt.rxpHidByUs = RXPHidden(); nt.SyncRXP() end
 end
 
 local events = CreateFrame("Frame")
@@ -81,4 +123,8 @@ events:SetScript("OnEvent", function(self, event, addon)
     end
     -- PLAYER_LOGIN: Naowh's modules are loaded by now
     Wrap()
+    if not nt.db then return end
+    HookRXP()
+    -- Naowh builds its window a moment after login
+    for _, delay in ipairs({ 2, 6, 15 }) do C_Timer.After(delay, nt.SyncRXP) end
 end)

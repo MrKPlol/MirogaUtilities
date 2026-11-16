@@ -186,6 +186,12 @@ local RESOURCE_TYPES = {
     HOLY_POWER = DEFAULT, SOUL_SHARDS = DEFAULT, CHI = DEFAULT, ARCANE_CHARGES = DEFAULT,
 }
 TYPES.ENERGIZE, TYPES.PERIODIC_ENERGIZE = DEFAULT, DEFAULT
+-- a gain reads "+20 Rage", never a bare number
+local RESOURCE_LABEL = {
+    MANA = "Mana", ENERGY = "Energy", RAGE = "Rage", FOCUS = "Focus", RUNIC_POWER = "Runic Power",
+    RUNE = "Runic Power", HOLY_POWER = "Holy Power", SOUL_SHARDS = "Soul Shards", CHI = "Chi",
+    ARCANE_CHARGES = "Arcane Charges",
+}
 
 -- ---------------------------------------------------------------------------
 -- user settings (Options.lua edits KPCombatTextDB.options, then calls
@@ -208,7 +214,9 @@ local CATEGORIES = {
     { key = "shields", label = "Shields gained", types = { "ABSORB_ADDED" } },
     { key = "buffs", label = "Buffs gained", types = { "AURA_START", "SPELL_AURA_START", "AURA_END", "SPELL_AURA_END" } },
     { key = "resources", label = "Resource gains (mana, rage, energy, ...)", types = { "ENERGIZE",
-        "MANA", "ENERGY", "RAGE", "FOCUS", "RUNE", "COMBO_POINTS" } },
+        "MANA", "ENERGY", "RAGE", "FOCUS", "RUNE" } },
+    -- every builder adds one: noise next to a combo point display, off unless switched on
+    { key = "combo", label = "Combo points", types = { "COMBO_POINTS" }, default = false },
     -- Passive regeneration ticks every few seconds; off unless switched on.
     { key = "ticks", label = "Resource ticks (regeneration)", types = { "PERIODIC_ENERGIZE" }, default = false },
     { key = "combat", label = "Entering / leaving combat", types = { "ENTERING_COMBAT", "LEAVING_COMBAT" } },
@@ -344,14 +352,19 @@ local WINDOW = DEFAULTS.window
 local LIFETIME, RISE -- set with the rendering defaults below
 local render -- forward-declared: consolidate calls it, defined below
 
-local function consolidate(now, mtype, amount, opts, key)
+local function amountText(amount, label)
+    if not label then return BreakUpLargeNumbers(amount) end
+    return "+" .. BreakUpLargeNumbers(amount) .. " " .. label
+end
+
+local function consolidate(now, mtype, amount, opts, key, label)
     key = key or mtype
     local p = pending[key]
     if WINDOW > 0 and p and p.entry and p.entry.fs and not p.entry.done and (now - p.t) <= WINDOW and amount then
         p.n = p.n + 1
         p.sum = p.sum + amount
         p.t = now
-        local text = BreakUpLargeNumbers(p.sum) .. " x" .. p.n
+        local text = amountText(p.sum, p.label) .. " x" .. p.n
         p.entry.fs:SetText(text)
         -- refresh the lifetime without jumping back to the spawn point
         p.entry.push = (p.entry.push or 0) + (now - p.entry.born) / LIFETIME * RISE
@@ -359,9 +372,9 @@ local function consolidate(now, mtype, amount, opts, key)
         return
     end
     if amount then
-        local entry = render(now, mtype, BreakUpLargeNumbers(amount), opts)
+        local entry = render(now, mtype, amountText(amount, label), opts)
         if entry and entry.fs then
-            pending[key] = { t = now, n = 1, sum = amount, entry = entry }
+            pending[key] = { t = now, n = 1, sum = amount, entry = entry, label = label }
         end
     end
 end
@@ -927,16 +940,28 @@ f:HookScript("OnEvent", function(self, event, mtype)
             return
         end
     end
-    local key
+    local key, label = nil, RESOURCE_LABEL[mtype]
     local resource = mtype == "ENERGIZE" or mtype == "PERIODIC_ENERGIZE"
-    if resource and issecretvalue and not issecretvalue(a2) and type(a2) == "string" and RESOURCE_TYPES[a2] then
-        opts = RESOURCE_TYPES[a2]
-        key = mtype .. ":" .. a2
+    local power = resource and not (issecretvalue and issecretvalue(a2)) and type(a2) == "string" and a2 or nil
+    if power == "COMBO_POINTS" or mtype == "COMBO_POINTS" then
+        -- Blizzard's COMBO_POINTS carries the count you have, a gain carries +1
+        if not categoryShown("combo") then return end
+        local n = cleanNum(value)
+        if not n then return end
+        local text = mtype == "COMBO_POINTS" and (n == 1 and "1 Combo Point" or (n .. " Combo Points")) or ("+" .. n .. " Combo Point" .. (n == 1 and "" or "s"))
+        render(GetTime(), mtype, text, TYPES.COMBO_POINTS)
+        return
+    end
+    if power and RESOURCE_TYPES[power] then
+        opts = RESOURCE_TYPES[power]
+        key = mtype .. ":" .. power
+        label = RESOURCE_LABEL[power]
     end
     local amount = cleanNum(value)
-    if resource and not key then amount = nil end
+    -- an unknown or secret power type: no bare number that nobody can read
+    if resource and not key then return end
     if amount then
-        consolidate(GetTime(), mtype, amount, opts, key)
+        consolidate(GetTime(), mtype, amount, opts, key, label)
     else
         render(GetTime(), mtype, tostring(value), opts)
     end

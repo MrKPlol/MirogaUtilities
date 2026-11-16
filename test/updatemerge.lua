@@ -42,6 +42,8 @@ end
 local function NaowhEUI(v)
     return {
         ppUIScale = 0.62,
+        tooltipShowTarget = false,
+        chars = { someone = { level = v } },
         profiles = { Naowh = { addons = {
             EllesmereUINameplates = { bottomSlotYOffset = 22, questTextSlot = "top", width = v },
             EllesmereUIChat = { chat = { timestampAll = false } },
@@ -53,6 +55,7 @@ end
 EllesmereUIDB = NaowhEUI(100)
 EllesmereUIDB.profiles.Naowh.addons.EllesmereUINameplates.bottomSlotYOffset = 15      -- yours
 EllesmereUIDB.ppUIScale = 0.63                                                        -- yours
+EllesmereUIDB.tooltipShowTarget = true                                                -- yours, outside the profile
 NaowhForeverDB = { profiles = { Naowh = { qol = { lockboxSkill = false, townMail = true } } } }
 NaowhUIDB = { global = { installer = { records = {
     EllesmereUI = { name = "Naowh", at = 100, version = 20261115.04 },
@@ -128,13 +131,17 @@ local sc = rows["scale"]
 ok(sc and sc.r.old == 0.63 and sc.r.pick == "old", "ui scale row")
 local rs = rows["profile" .. P .. "qol" .. P .. "lockboxSkill"]
 ok(rs and rs.r.old == false and rs.r.new == true and rs.r.kind == "update", "forever row")
-ok(um.TotalRows() == 4, "only real differences: " .. um.TotalRows())
+local tt = rows["globals" .. P .. "tooltipShowTarget"]
+ok(tt and tt.r.old == true and tt.r.new == false and tt.r.kind == "yours" and tt.r.pick == "old", "global tooltip setting row")
+ok(um.TotalRows() == 5, "only real differences (chars ignored): " .. um.TotalRows())
 
 -- 6. you flip two rows, apply
 um.SetPick(w.id, w.i, "old")      -- keep your width
 um.SetPick(sc.id, sc.i, "new")    -- take Naowh's scale
 local done, written = um.Apply()
-ok(done and written == 2, "apply wrote " .. tostring(written))
+ok(done and written == 3, "apply wrote " .. tostring(written))
+ok(EllesmereUIDB.tooltipShowTarget == true, "global setting written back at the top level")
+ok(um.Label(tt.r.keys) == "General > tooltipShowTarget", "global label: " .. um.Label(tt.r.keys))
 local np = EllesmereUIDB.profiles.Naowh.addons.EllesmereUINameplates
 ok(np.bottomSlotYOffset == 15 and np.width == 100, "OLD values in the live table")
 ok(EllesmereUIDB.ppUIScale == 0.62, "NEW value untouched")
