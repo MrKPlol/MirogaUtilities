@@ -3,6 +3,9 @@
 -- the caster page. The key press cancels the form and the key release casts
 -- it: Blizzard's secure press-and-hold path, usable in combat.
 local root = select(2, ...)
+-- the hub page and the home switch look for this table
+local ps = { druid = select(2, UnitClass("player")) == "DRUID" }
+if root then root.Powershift = ps end
 local _, class = UnitClass("player")
 if class ~= "DRUID" then return end
 
