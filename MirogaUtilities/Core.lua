@@ -11,6 +11,48 @@ local function Say(text)
 end
 root.Say = Say
 
+-- ---------------------------------------------------------------------------
+-- module switchboard: MirogaUtilitiesDB.off[key] = true keeps a module from
+-- starting at the next login or reload. Every module asks once, in its own
+-- first event after the saved variables are in, and then stays silent.
+
+root.MODULES = {
+    { key = "CombatText", label = "Combat text", desc = "Damage, heals, buffs and debuffs on you, in movable boxes." },
+    { key = "Powershift", label = "Powershift", desc = "Form to form in one key press, travel form included." },
+    { key = "FlagPlates", label = "Flagged players", desc = "Turquoise nameplates, alerts and statistics for players on your list." },
+    { key = "AutoMark", label = "Auto mark", desc = "Raid marks on your own group." },
+    { key = "VendorCoin", label = "Vendor coin", desc = "Red coin on items the vendor pays more for than the AH." },
+    { key = "Stockpile", label = "Stockpile", desc = "Hold raid materials, cheap price hints, snipe alerts." },
+    { key = "NaowhTweaks", label = "Naowh tweaks", desc = "Scrolls and buff drinks only in dungeons and raids." },
+    { key = "UpdateMerge", label = "Update merge", desc = "After a NaowhUI update: OLD or NEW for every changed setting." },
+    { key = "Weather", label = "Weather", desc = "One key: storms low, again: your weather back." },
+    { key = "LoginQuiet", label = "Login quiet", desc = "No addon spam in the chat after login or reload." },
+}
+
+-- the saved choice (false until the saved variables are loaded)
+function root.IsOff(key)
+    local db = MirogaUtilitiesDB
+    return type(db) == "table" and type(db.off) == "table" and db.off[key] == true or false
+end
+
+-- a module's gate: true = off, its frame is silenced for this session
+function root.Off(key, frame)
+    if not root.IsOff(key) then return false end
+    root.offNow = root.offNow or {}
+    root.offNow[key] = true
+    if frame and frame.UnregisterAllEvents then frame:UnregisterAllEvents() end
+    return true
+end
+
+-- off for this session (the switch may already say otherwise until reload)
+function root.Stopped(key) return root.offNow and root.offNow[key] or false end
+
+function root.SetModule(key, on)
+    if type(MirogaUtilitiesDB) ~= "table" then MirogaUtilitiesDB = {} end
+    MirogaUtilitiesDB.off = MirogaUtilitiesDB.off or {}
+    MirogaUtilitiesDB.off[key] = (not on) or nil
+end
+
 local standalone = {}
 for module, addon in pairs({ CombatText = "KPCombatText", FlagPlates = "KPFlagPlates" }) do
     if C_AddOns.IsAddOnLoaded(addon) then
@@ -33,11 +75,20 @@ end)
 -- slash commands: one letter each, the old long forms still work
 
 local TEXT_SHORT = { m = "anchor", p = "test", b = "blizz" }
-local PAGES = { o = "text", e = "events", a = "alerts", s = "shift" }
+local PAGES = { o = "text", e = "events", a = "alerts", s = "shift", u = "merge" }
 
 local function Open(page)
     if root.OpenHub then root.OpenHub(page) end
 end
+
+local COMMAND_MODULE = {
+    t = "FlagPlates", target = "FlagPlates", f = "FlagPlates", flag = "FlagPlates", a = "FlagPlates",
+    m = "CombatText", p = "CombatText", b = "CombatText", c = "CombatText", text = "CombatText",
+    o = "CombatText", e = "CombatText",
+    r = "AutoMark", mark = "AutoMark", q = "LoginQuiet", quiet = "LoginQuiet",
+    w = "Weather", weather = "Weather", h = "Stockpile", hold = "Stockpile",
+    v = "VendorCoin", vendor = "VendorCoin", s = "Powershift", u = "UpdateMerge",
+}
 
 SLASH_MIROGAUTILITIES1 = "/mu"
 SLASH_MIROGAUTILITIES2 = "/miroga"
@@ -45,6 +96,11 @@ SlashCmdList.MIROGAUTILITIES = function(msg)
     local command, rest = strtrim(msg or ""):match("^(%S*)%s*(.-)$")
     command = strlower(command)
     local ct, fp = root.CombatText, root.FlagPlates
+    local module = COMMAND_MODULE[command]
+    if module and root.Stopped(module) then
+        Say(module .. " is off. Turn it on in /mu > Home.")
+        return
+    end
     if command == "" then
         if root.ToggleHub then root.ToggleHub() end
     elseif command == "t" or command == "target" then
@@ -75,7 +131,7 @@ SlashCmdList.MIROGAUTILITIES = function(msg)
     elseif PAGES[command] then
         Open(PAGES[command])
     else
-        Say("/mu (window), /mu t (flag target), /mu f (players), /mu c (combat text), /mu r (auto mark), /mu w (weather low/back), /mu v (vendor or AH), /mu h (hold item), /mu q (hidden login lines), /mu m (move boxes), /mu p (preview)")
+        Say("/mu (window), /mu t (flag target), /mu f (players), /mu c (combat text), /mu r (auto mark), /mu w (weather low/back), /mu v (vendor or AH), /mu h (hold item), /mu u (update merge), /mu q (hidden login lines), /mu m (move boxes), /mu p (preview)")
     end
 end
 

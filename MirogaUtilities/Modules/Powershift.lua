@@ -2,6 +2,7 @@
 -- press leaves the client reporting no form, so Action Bar 1 falls back to
 -- the caster page. The key press cancels the form and the key release casts
 -- it: Blizzard's secure press-and-hold path, usable in combat.
+local root = select(2, ...)
 local _, class = UnitClass("player")
 if class ~= "DRUID" then return end
 
@@ -104,4 +105,7 @@ end
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 watcher:RegisterEvent("UPDATE_SHAPESHIFT_FORMS")
 watcher:RegisterEvent("SPELLS_CHANGED")
-watcher:SetScript("OnEvent", UpdateBearSpell)
+watcher:SetScript("OnEvent", function(self)
+    if root and root.Off and root.Off("Powershift", self) then return end
+    UpdateBearSpell()
+end)

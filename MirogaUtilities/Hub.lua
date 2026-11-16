@@ -14,7 +14,7 @@ local T = {
 }
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local PAD = 28            -- page side padding
-local WINDOW_W, WINDOW_H, SIDEBAR_W = 800, 640, 210
+local WINDOW_W, WINDOW_H, SIDEBAR_W = 800, 690, 210
 
 local FONT, MONO = STANDARD_TEXT_FONT, nil
 do
@@ -1169,6 +1169,8 @@ local function BuildNaowhPage(page)
     Section(page, "Buffs & Consumables")
     ToggleRow(page, "Scrolls only in dungeons and raids", "Naowh's scroll reminder stays away in the open world. Food, flasks and elixirs keep Naowh's own rules.",
         function() return db().scrollsInstanceOnly end, function(v) nt.Set("scrollsInstanceOnly", v) end)
+    ToggleRow(page, "Buff drinks only in dungeons and raids", "Kreeg's Stout, Rumsey Rum, Juju, Zanza and the other buff items stay away in the open world.",
+        function() return db().drinksInstanceOnly end, function(v) nt.Set("drinksInstanceOnly", v) end)
     local row = Row(page, "Naowh Forever", "Needs Naowh Forever: Combat with its Buffs & Consumables row.")
     local status = Text(row, 13, ACCENT, MONO ~= nil)
     status:SetPoint("RIGHT", -14, 0)
@@ -1178,6 +1180,206 @@ local function BuildNaowhPage(page)
     end
     Note(page, "Takes effect at the next refresh of Naowh's row (moving, buffing or a zone change).")
     page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
+-- update merge: every row the same, OLD left, NEW right, the lit one counts
+
+local PICK_W = 150
+local KIND_TITLE = {
+    yours = "You kept these on OLD last time",
+    update = "Changed by the update",
+}
+local KIND_NOTE = {
+    yours = "Your own settings from the last merge. They start on OLD.",
+    update = "Not on your list. They start on NEW.",
+}
+
+local function PickButton(parent, onClick)
+    local b = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    b:SetSize(PICK_W, 26)
+    b:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
+    local label = Text(b, 12)
+    label:SetPoint("LEFT", 8, 0)
+    label:SetPoint("RIGHT", -8, 0)
+    label:SetJustifyH("CENTER")
+    label:SetWordWrap(false)
+    b.label = label
+    local hover, on = false, false
+    local function paint()
+        if on then
+            b:SetBackdropColor(ACCENT[1], ACCENT[2], ACCENT[3], hover and 0.50 or 0.38)
+            b:SetBackdropBorderColor(ACCENT[1], ACCENT[2], ACCENT[3], 1)
+            label:SetTextColor(1, 1, 1, 1)
+        else
+            b:SetBackdropColor(0.089, 0.080, 0.072, hover and 0.75 or 0.6)
+            b:SetBackdropBorderColor(1, 1, 1, hover and 0.35 or 0.15)
+            label:SetTextColor(1, 1, 1, hover and 0.75 or 0.45)
+        end
+    end
+    function b:SetOn(v) on = v and true or false; paint() end
+    b:SetScript("OnEnter", function(self)
+        hover = true; paint()
+        if self.details then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(self.head or "", 1, 1, 1)
+            for _, line in ipairs(self.details) do GameTooltip:AddLine(line, 0.8, 0.8, 0.8) end
+            GameTooltip:Show()
+        end
+    end)
+    b:SetScript("OnLeave", function() hover = false; paint(); GameTooltip:Hide() end)
+    b:SetScript("OnClick", onClick)
+    paint()
+    return b
+end
+
+local function BuildMergePage(page)
+    local um = root.UpdateMerge
+    local realBody = page.body
+    local holder
+
+    local function Rebuild()
+        if holder then holder:Hide() end
+        holder = CreateFrame("Frame", nil, realBody)
+        holder:SetPoint("TOPLEFT")
+        holder:SetSize(realBody:GetWidth(), 1)
+        page.body, page.y, page.refreshers = holder, -12, {}
+
+        local phase = um.Phase()
+        if phase == "review" then
+            for _, src in ipairs(um.SOURCES) do
+                local s = um.Rows(src.id)
+                if s then
+                    Section(page, ("%s  ·  Naowh %s  ·  %d settings"):format(src.label, tostring(s.version or "?"), #s.rows))
+                    local head = CreateFrame("Frame", nil, holder)
+                    head:SetPoint("TOPLEFT", PAD, page.y)
+                    head:SetPoint("TOPRIGHT", -PAD, page.y)
+                    head:SetHeight(20)
+                    local newHead = Text(head, 12, ACCENT)
+                    newHead:SetPoint("RIGHT", -12, 0)
+                    newHead:SetWidth(PICK_W)
+                    newHead:SetJustifyH("CENTER")
+                    newHead:SetText("NEW  ·  after")
+                    local oldHead = Text(head, 12, ACCENT)
+                    oldHead:SetPoint("RIGHT", newHead, "LEFT", -8, 0)
+                    oldHead:SetWidth(PICK_W)
+                    oldHead:SetJustifyH("CENTER")
+                    oldHead:SetText("OLD  ·  before")
+                    page.y = page.y - 24
+
+                    for _, kind in ipairs({ "yours", "update" }) do
+                        local list = {}
+                        for i, r in ipairs(s.rows) do if r.kind == kind then list[#list + 1] = i end end
+                        if #list > 0 then
+                            local sec = Section(page, KIND_TITLE[kind] .. "  (" .. #list .. ")")
+                            sec:SetTextColor(1, 1, 1, 0.7)
+                            local paints = {}
+                            local bar = CreateFrame("Frame", nil, holder)
+                            bar:SetPoint("TOPLEFT", PAD, page.y + 18)
+                            bar:SetPoint("TOPRIGHT", -PAD, page.y + 18)
+                            bar:SetHeight(18)
+                            local allNew = FlatButton(bar, "All NEW", PICK_W, function()
+                                um.SetAll(src.id, kind, "new"); for _, f in ipairs(paints) do f() end
+                            end)
+                            allNew:SetHeight(18)
+                            allNew:SetPoint("RIGHT", -12, 0)
+                            local allOld = FlatButton(bar, "All OLD", PICK_W, function()
+                                um.SetAll(src.id, kind, "old"); for _, f in ipairs(paints) do f() end
+                            end)
+                            allOld:SetHeight(18)
+                            allOld:SetPoint("RIGHT", allNew, "LEFT", -8, 0)
+                            local note = Text(holder, 11, T.muted)
+                            note:SetPoint("TOPLEFT", PAD + 2, page.y)
+                            note:SetText(KIND_NOTE[kind])
+                            page.y = page.y - 18
+
+                            local lastGroup
+                            for _, i in ipairs(list) do
+                                local r = s.rows[i]
+                                local group = um.Group(r.keys)
+                                local row = Row(page, um.Label(r.keys), group ~= lastGroup and group or " ", 40)
+                                lastGroup = group
+                                row.name:SetPoint("RIGHT", row, "RIGHT", -(2 * PICK_W + 32), 0)
+                                row.name:SetWordWrap(false)
+                                local spells = r.keys[1] == "spells"
+                                local newB, oldB
+                                local function paint()
+                                    oldB:SetOn(r.pick == "old")
+                                    newB:SetOn(r.pick == "new")
+                                end
+                                newB = PickButton(row, function() um.SetPick(src.id, i, "new"); paint() end)
+                                newB:SetPoint("RIGHT", -12, 0)
+                                oldB = PickButton(row, function() um.SetPick(src.id, i, "old"); paint() end)
+                                oldB:SetPoint("RIGHT", newB, "LEFT", -8, 0)
+                                oldB.label:SetText(um.Value(r.old))
+                                newB.label:SetText(um.Value(r.new))
+                                oldB.head, newB.head = "OLD: " .. um.Label(r.keys), "NEW: " .. um.Label(r.keys)
+                                oldB.details, newB.details = um.Details(r.old, spells), um.Details(r.new, spells)
+                                if row.desc then row.desc:SetPoint("RIGHT", oldB, "LEFT", -12, 0) end
+                                paint()
+                                paints[#paints + 1] = paint
+                            end
+                        end
+                    end
+                end
+            end
+            ButtonBar(page, {
+                { "Apply and reload", 170, function()
+                    if InCombatLockdown() then Say("Not in combat."); return end
+                    local ok, result = um.Apply()
+                    if not ok then Say(result); return end
+                    Say(("%d settings back to OLD, everything else stays NEW. Reloading."):format(result))
+                    ReloadUI()
+                end, true },
+                { "Keep all NEW", 140, function()
+                    um.Cancel()
+                    Say("Everything stays as the update set it.")
+                    Rebuild()
+                end },
+            })
+        else
+            Section(page, "Status")
+            local installed, imported = um.InstalledVersion(), um.ImportedVersion()
+            local row = Row(page, "NaowhUI", "Installed add-on and the version in your profiles.")
+            local v = Text(row, 12, ACCENT, MONO ~= nil)
+            v:SetPoint("RIGHT", -14, 0)
+            v:SetJustifyH("RIGHT")
+            v:SetText(("%s  /  %s"):format(tostring(installed or "-"), tostring(imported or "-")))
+            local state = Row(page, "Update", nil)
+            local st = Text(state, 12, ACCENT, MONO ~= nil)
+            st:SetPoint("RIGHT", -14, 0)
+            st:SetJustifyH("RIGHT")
+            if phase == "snapped" then
+                local done, total = um.Status()
+                st:SetText(("snapshot saved, %d of %d profiles imported"):format(done or 0, total or 0))
+                ButtonBar(page, {
+                    { "Open NaowhUI", 140, function() um.Watch(); if NaowhUI_AddonCompartmentFunc then NaowhUI_AddonCompartmentFunc() end end, true },
+                    { "Cancel merge", 140, function() um.Cancel(); Say("Merge cancelled, snapshot deleted."); Rebuild() end },
+                })
+            elseif um.UpdateWaiting() then
+                st:SetText("|cffffcc00new version waiting|r")
+                ButtonBar(page, {
+                    { "Snapshot + NaowhUI", 170, function() um.SnapAndInstall(); Rebuild() end, true },
+                })
+            else
+                st:SetText("up to date")
+            end
+            local kept = 0
+            for _, list in pairs(um.db and um.db.keep or {}) do for _ in pairs(list) do kept = kept + 1 end end
+            local k = Row(page, "Your kept settings", "Start on OLD at the next update.")
+            local kt = Text(k, 12, ACCENT, MONO ~= nil)
+            kt:SetPoint("RIGHT", -14, 0)
+            kt:SetJustifyH("RIGHT")
+            kt:SetText(tostring(kept))
+            Note(page, "Nothing runs until NaowhUI is newer than your profiles. Then: snapshot, import in NaowhUI, reload, " ..
+                "and here every changed setting with OLD (before) left and NEW (after) right.")
+        end
+        page:Finish()
+    end
+
+    page.Rebuild = Rebuild
+    page:SetScript("OnShow", function() Rebuild() end)
+    Rebuild()
 end
 
 -- ---------------------------------------------------------------------------
@@ -1207,6 +1409,7 @@ local COMMANDS = {
     { "/mu h 12.5", "target price for it (12g 50s)" },
     { "/mu h sync", "held items to Auctionator's list" },
     { "/mu h o", "stockpile settings and list" },
+    { "/mu u", "after a Naowh update: OLD or NEW" },
 }
 
 local function BuildHelpPage(page)
@@ -1226,24 +1429,57 @@ end
 -- ---------------------------------------------------------------------------
 -- hub window
 
+-- ---------------------------------------------------------------------------
+-- home: every module with its switch; a change needs a reload
+
+local function BuildHomePage(page)
+    Section(page, "Modules")
+    local changed = {}
+    local reloadRow
+    local function update()
+        local any = next(changed) ~= nil
+        if reloadRow then reloadRow:SetShown(any) end
+    end
+    for _, m in ipairs(root.MODULES) do
+        local key = m.key
+        local start = not root.IsOff(key)
+        local unavailable = (key == "CombatText" or key == "FlagPlates") and not root[key]
+        local row = ToggleRow(page, m.label, unavailable and "Off while its standalone addon is enabled." or m.desc,
+            function() return not root.IsOff(key) end,
+            function(v)
+                root.SetModule(key, v)
+                if v == start then changed[key] = nil else changed[key] = true end
+                update()
+            end)
+        if unavailable then row.name:SetTextColor(1, 1, 1, 0.4) end
+    end
+    page.y = page.y - 6
+    reloadRow = Row(page, "|cffffcc00Changes start after a reload.|r", nil, 34)
+    local reload = FlatButton(reloadRow, "Reload now", 130, function() ReloadUI() end, true)
+    reload:SetPoint("RIGHT", -12, 0)
+    reloadRow:Hide()
+    Note(page, "A module that is off does not start at all: no events, no hooks, no memory. Its settings stay saved.")
+    page:Finish()
+end
+
 local TABS = {
-    { group = "COMBAT TEXT" },
-    { key = "text", label = "Settings", sub = "Damage, heals, buffs and debuffs on you: boxes, font, timing.",
+    { key = "home", label = "Home", sub = "Turn modules on or off. Everything else is in the groups below.",
+        icon = "Interface\\Icons\\Ability_Druid_CatForm", build = BuildHomePage },
+    { group = "COMBAT" },
+    { key = "text", label = "Combat text", sub = "Damage, heals, buffs and debuffs on you: boxes, font, timing.",
         icon = "Interface\\Icons\\Spell_Fire_FlameBolt", module = "CombatText", build = BuildTextPage },
-    { key = "events", label = "Events & Colors", sub = "What shows up, and in which color.",
+    { key = "events", label = "Events & colors", sub = "What shows up, and in which color.",
         icon = "Interface\\Icons\\INV_Misc_Gem_Variety_01", module = "CombatText", build = BuildEventsPage },
-    { group = "FLAGGED PLAYERS" },
-    { key = "players", label = "Players", sub = "Everyone on this list gets marked nameplates, alerts and statistics.",
+    { key = "shift", label = "Powershift", sub = "Form to form in one key press, without the action bar bug.",
+        icon = "Interface\\Icons\\Ability_Druid_CatForm", module = "Powershift", build = BuildShiftPage },
+    { group = "PLAYERS & GROUP" },
+    { key = "players", label = "Flagged players", sub = "Everyone on this list gets marked nameplates, alerts and statistics.",
         icon = "Interface\\Icons\\Ability_Hunter_SniperShot", module = "FlagPlates", build = BuildPlayersPage },
-    { key = "alerts", label = "Plates & Alerts", sub = "Plate color, sound, chat message and statistics.",
+    { key = "alerts", label = "Plates & alerts", sub = "Plate color, sound, chat message and statistics.",
         icon = "Interface\\Icons\\Spell_Holy_SealOfWisdom", module = "FlagPlates", build = BuildAlertsPage },
-    { group = "GROUP" },
-    { key = "marks", label = "Auto Mark", sub = "Raid marks on your own group, nobody else in it.",
+    { key = "marks", label = "Auto mark", sub = "Raid marks on your own group, nobody else in it.",
         icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1", module = "AutoMark", build = BuildMarksPage },
-    { group = "CHAT" },
-    { key = "quiet", label = "Login quiet", sub = "No addon spam in the chat after login or /reload.",
-        icon = "Interface\\Icons\\INV_Misc_Note_02", module = "LoginQuiet", build = BuildQuietPage },
-    { group = "BAGS" },
+    { group = "BAGS & GOLD" },
     { key = "vendor", label = "Vendor coin", sub = "Red coin on items the vendor pays more for than the AH.",
         icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", build = BuildVendorPage },
     { key = "stockpile", label = "Stockpile", sub = "Keep raid materials for later, see cheap prices, snipe them.",
@@ -1251,13 +1487,13 @@ local TABS = {
     { group = "NAOWH" },
     { key = "naowh", label = "Naowh tweaks", sub = "Small changes to Naowh Forever, without touching its files.",
         icon = "Interface\\Icons\\INV_Scroll_03", module = "NaowhTweaks", build = BuildNaowhPage },
-    { group = "WORLD" },
+    { key = "merge", label = "Update merge", sub = "After a Naowh update: OLD or NEW for every setting that changed.",
+        icon = "Interface\\Icons\\INV_Misc_Book_09", module = "UpdateMerge", build = BuildMergePage },
+    { group = "WORLD & CHAT" },
     { key = "weather", label = "Weather", sub = "One click: storms low. Next click: your old weather back.",
         icon = "Interface\\Icons\\Spell_Frost_IceStorm", module = "Weather", build = BuildWeatherPage },
-    { group = "DRUID" },
-    { key = "shift", label = "Powershift", sub = "Form to form in one key press, without the action bar bug.",
-        icon = "Interface\\Icons\\Ability_Druid_CatForm", build = BuildShiftPage },
-    { group = "HELP" },
+    { key = "quiet", label = "Login quiet", sub = "No addon spam in the chat after login or /reload.",
+        icon = "Interface\\Icons\\INV_Misc_Note_02", module = "LoginQuiet", build = BuildQuietPage },
     { key = "help", label = "Commands", sub = "Everything is one letter after /mu.",
         icon = "Interface\\Icons\\INV_Misc_Note_01", build = BuildHelpPage },
 }
@@ -1266,7 +1502,7 @@ local hub, current
 local tabButtons, pages = {}, {}
 
 local function SelectTab(key)
-    if not pages[key] then key = "text" end
+    if not pages[key] then key = "home" end
     current = key
     for _, tab in ipairs(TABS) do
         if tab.key then
@@ -1341,17 +1577,17 @@ local function BuildHub()
     local y = -78
     for _, tab in ipairs(TABS) do
         if tab.group then
-            if y < -78 then y = y - 10 end
-            local g = Text(side, 11, { 1, 1, 1, 0.4 })
+            if y < -78 then y = y - 8 end
+            local g = Text(side, 10, { 1, 1, 1, 0.4 })
             g:SetPoint("TOPLEFT", 20, y)
             g:SetText(tab.group)
-            y = y - 20
+            y = y - 17
         else
             local b = CreateFrame("Button", nil, side)
             b:SetPoint("TOPLEFT", 8, y)
             b:SetPoint("TOPRIGHT", -9, y)
-            b:SetHeight(30)
-            y = y - 32
+            b:SetHeight(27)
+            y = y - 29
             b.fill = Fill(b, { ACCENT[1], ACCENT[2], ACCENT[3], 0.16 })
             b.fill:SetAllPoints()
             b.marker = Fill(b, { ACCENT[1], ACCENT[2], ACCENT[3], 1 }, "ARTWORK")
@@ -1373,9 +1609,11 @@ local function BuildHub()
 
             local page = NewPage(content, tab.label, tab.sub)
             pages[tab.key] = page
-            if tab.module and not root[tab.module] then
+            if tab.module and (not root[tab.module] or (root.Stopped and root.Stopped(tab.module))) then
                 b.icon:SetDesaturated(true)
-                Note(page, "This module is off while its standalone addon is enabled.")
+                b.label:SetAlpha(0.45)
+                Note(page, root[tab.module] and "This module is off. Turn it on under Home, then reload."
+                    or "This module is off while its standalone addon is enabled.")
                 page:Finish()
             else
                 local ok, err = pcall(tab.build, page)
@@ -1396,7 +1634,7 @@ end
 
 local function OpenHub(key)
     hub = hub or BuildHub()
-    SelectTab(key or current or "text")
+    SelectTab(key or current or "home")
     hub:Show()
 end
 root.OpenHub = OpenHub

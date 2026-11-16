@@ -1,16 +1,20 @@
 -- Naowh tweaks: small changes to Naowh Forever without touching its files.
 --
--- Scrolls only in instances: Naowh's Buffs & Consumables row shows a stat
--- scroll you carry everywhere its consumables show. Its "Show in the World"
--- switch covers food, flasks, elixirs and scrolls together, so this drops
--- only the scroll icon outside dungeons and raids. Naowh's list builder
+-- Only in instances: Naowh's Buffs & Consumables row shows a stat scroll and
+-- buff drinks (Kreeg's Stout, Rumsey Rum, Juju, Zanza: Naowh's "other"
+-- group) everywhere its consumables show. Its "Show in the World" switch
+-- covers food, flasks, elixirs and scrolls together, so this drops only
+-- those icons outside dungeons and raids. Naowh's list builder
 -- (NaowhForever.AuraBuffs.Buffs.Collect) is wrapped; its UI looks the
 -- function up on every refresh, so the wrapper is used from then on.
 local _, root = ...
 local nt = {}
 root.NaowhTweaks = nt
 
-nt.DEFAULTS = { scrollsInstanceOnly = true }
+nt.DEFAULTS = { scrollsInstanceOnly = true, drinksInstanceOnly = true }
+
+-- row key -> setting that keeps it to dungeons and raids
+local INSTANCE_ONLY = { scroll = "scrollsInstanceOnly", other = "drinksInstanceOnly" }
 
 local function InDungeonOrRaid()
     local inInstance, kind = IsInInstance()
@@ -36,9 +40,10 @@ local function Wrap()
     buffs.Collect = function(...)
         local list = original(...)
         local db = nt.db
-        if type(list) == "table" and db and db.scrollsInstanceOnly and not InDungeonOrRaid() then
+        if type(list) == "table" and db and not InDungeonOrRaid() then
             for i = #list, 1, -1 do
-                if type(list[i]) == "table" and list[i].key == "scroll" then table.remove(list, i) end
+                local setting = type(list[i]) == "table" and INSTANCE_ONLY[list[i].key]
+                if setting and db[setting] then table.remove(list, i) end
             end
         end
         return list
@@ -58,6 +63,7 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(self, event, addon)
     if event == "ADDON_LOADED" then
         if addon == "MirogaUtilities" then
+            if root.Off("NaowhTweaks", self) then return end
             local db = MirogaUtilitiesDB
             if type(db) ~= "table" then
                 db = {}

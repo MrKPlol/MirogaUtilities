@@ -332,6 +332,7 @@ events:SetScript("OnEvent", function(self, event, arg)
     if event == "ADDON_LOADED" then
         if arg ~= "MirogaUtilities" then return end
         self:UnregisterEvent("ADDON_LOADED")
+        if root.Off("AutoMark", self) then return end
         InitDB()
         RestorePosition()
         self:RegisterEvent("PLAYER_ENTERING_WORLD")

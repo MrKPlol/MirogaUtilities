@@ -423,6 +423,7 @@ events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(self, event, addon)
     if event == "ADDON_LOADED" and addon == "MirogaUtilities" then
+        if root.Off("Stockpile", self) then return end
         if type(MirogaStockpileDB) ~= "table" then MirogaStockpileDB = {} end
         local db = MirogaStockpileDB
         for key, value in pairs(sp.DEFAULTS) do

@@ -104,6 +104,7 @@ events:SetScript("OnEvent", function(self, event, arg1, arg2)
     if event == "ADDON_LOADED" then
         if arg1 ~= "MirogaUtilities" then return end
         self:UnregisterEvent("ADDON_LOADED")
+        if root.Off("LoginQuiet", self) then return end
         if type(MirogaUtilitiesDB) ~= "table" then MirogaUtilitiesDB = {} end
         MirogaUtilitiesDB.loginQuiet = MirogaUtilitiesDB.loginQuiet or {}
         local db = MirogaUtilitiesDB.loginQuiet

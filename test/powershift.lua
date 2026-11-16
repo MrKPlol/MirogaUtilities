@@ -14,6 +14,9 @@ local function NewFrame(name)
 end
 CreateFrame = function(_, name) return NewFrame(name) end
 UIParent = {}
+format = string.format
+local driver
+RegisterStateDriver = function(_, state, d) driver = d end
 UnitClass = function() return "Druid", "DRUID" end
 InCombatLockdown = function() return combat end
 GetNumShapeshiftForms = function() return #forms end
@@ -34,4 +37,7 @@ forms[1] = 9634; combat = true; watcher.OnEvent(watcher, "UPDATE_SHAPESHIFT_FORM
 ok(bear.attrs.spell == 5487 and watcher.events.PLAYER_REGEN_ENABLED, "defers in combat")
 combat = false; watcher.OnEvent(watcher, "PLAYER_REGEN_ENABLED")
 ok(bear.attrs.spell == 9634 and not watcher.events.PLAYER_REGEN_ENABLED, "dire bear after combat")
+ok(driver == "[swimming] none; none", "travel driver without travel forms")
+forms[4] = 783; watcher.OnEvent(watcher, "SPELLS_CHANGED")
+ok(driver == "[swimming] none; [form:4] off; [indoors] none; land", "travel driver with travel form: " .. tostring(driver))
 print(checks .. " checks, " .. fails .. " failures"); os.exit(fails == 0 and 0 or 1)

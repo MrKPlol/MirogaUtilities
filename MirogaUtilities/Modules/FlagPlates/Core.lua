@@ -295,6 +295,7 @@ boot:RegisterEvent("ADDON_LOADED")
 boot:SetScript("OnEvent", function(self, event, name)
     if name ~= ADDON then return end
     self:UnregisterEvent("ADDON_LOADED")
+    if root and root.Off and root.Off("FlagPlates", self) then return end
     ns.InitDB()
     HookMenus()
     if ns.InitEncounters then ns.InitEncounters() end

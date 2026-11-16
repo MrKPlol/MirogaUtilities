@@ -834,10 +834,12 @@ f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", function(self, event, unit, showVehicle)
     if event == "COMBAT_TEXT_UPDATE" or event == "UNIT_COMBAT" or event == "UNIT_AURA" then return end -- handled by the hooks below
     if event == "ADDON_LOADED" then
+        if unit == addonName and root.Off and root.Off("CombatText", self) then return end
         if unit == "Blizzard_CombatText" then applyBlizzard() end
         if unit == addonName then applyWorldFont() end
         return
     end
+    if root.Stopped and root.Stopped("CombatText") then return end
     if event == "PLAYER_REGEN_DISABLED" or event == "PLAYER_REGEN_ENABLED" then
         if C_CombatText == nil then return end
         local mtype = event == "PLAYER_REGEN_DISABLED" and "ENTERING_COMBAT" or "LEAVING_COMBAT"

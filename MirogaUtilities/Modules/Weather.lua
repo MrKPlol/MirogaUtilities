@@ -192,6 +192,7 @@ events:SetScript("OnEvent", function(self, event, addon)
     if event == "ADDON_LOADED" then
         if addon ~= "MirogaUtilities" then return end
         self:UnregisterEvent("ADDON_LOADED")
+        if root.Off("Weather", self) then return end
         if type(MirogaWeatherDB) ~= "table" then MirogaWeatherDB = {} end
         local db = MirogaWeatherDB
         for key, value in pairs(wx.DEFAULTS) do

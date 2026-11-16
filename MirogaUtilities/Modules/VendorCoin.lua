@@ -544,6 +544,7 @@ events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(self, event, addon)
     if event == "ADDON_LOADED" and addon == "MirogaUtilities" then
+        if root.Off("VendorCoin", self) then return end
         if type(MirogaVendorDB) ~= "table" then MirogaVendorDB = {} end
         local db = MirogaVendorDB
         for key, value in pairs(vc.DEFAULTS) do
