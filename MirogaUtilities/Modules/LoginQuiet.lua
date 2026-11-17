@@ -7,7 +7,7 @@
 --   data behind the color; real chat and system messages always do, so
 --   they stay. Secret texts are never touched.
 --
--- Hidden lines are kept for this session: /mu q prints them.
+-- Hidden lines are kept for this session: /mu > Login quiet prints them.
 local _, root = ...
 local lq = {}
 root.LoginQuiet = lq
@@ -57,7 +57,7 @@ local function Stop()
     end
     originalPrint = nil
     if #lq.hidden > 0 then
-        root.Say(("%d login lines hidden. |cff%s/mu q|r shows them."):format(#lq.hidden, root.ACCENT_HEX))
+        root.Say(("%d login lines hidden. |cff%s/mu|r > Login quiet shows them."):format(#lq.hidden, root.ACCENT_HEX))
     end
 end
 

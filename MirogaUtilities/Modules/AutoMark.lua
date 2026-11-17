@@ -268,7 +268,7 @@ function am.Apply(announce)
             elseif reason == "stranger" then Say("Someone in the party is not on your list, no marks.")
             elseif reason == "unknown" then Say("Names are not known yet, try again in a moment.")
             elseif reason == "raid" then Say("Auto Mark only works in a party, not in a raid.")
-            elseif reason == "off" then Say("Auto Mark is off (/mu r).")
+            elseif reason == "off" then Say("Auto Mark is off (/mu > Auto mark).")
             else Say("You are not in a party.") end
         end
         return false, reason

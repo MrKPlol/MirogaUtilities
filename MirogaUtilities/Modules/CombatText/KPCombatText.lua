@@ -9,7 +9,6 @@
 local addonName, root = ...
 local ns = root.CombatText
 if not ns then return end
-ns = ns or {} -- Options.lua reads the shared tables and helpers below
 
 -- ---------------------------------------------------------------------------
 -- event info access
@@ -194,7 +193,7 @@ local RESOURCE_LABEL = {
 }
 
 -- ---------------------------------------------------------------------------
--- user settings (Options.lua edits KPCombatTextDB.options, then calls
+-- user settings (the hub edits KPCombatTextDB.options, then calls
 -- ns.ApplySettings). Event categories gate what is shown; color slots
 -- recolor the shared TYPES styles in place, so aliases follow automatically.
 
@@ -339,8 +338,6 @@ local function setCategoryShown(key, v)
     if (v and true or false) == (CATEGORY_DEFAULT[key] ~= false) then show[key] = nil else show[key] = v and true or false end
 end
 
--- /mu c debug: print the event type of every combat text line for a while
-local debugUntil = 0
 
 -- ---------------------------------------------------------------------------
 -- consolidation: the first hit renders immediately; repeats inside the window
@@ -903,7 +900,6 @@ f:HookScript("OnEvent", function(self, event, mtype)
     if type(getCurrentEventInfo) ~= "function" then return end
     if issecretvalue and issecretvalue(mtype) then return end
     if type(mtype) ~= "string" then return end
-    if GetTime() < debugUntil then print("|cff40e0d0MU SCT|r " .. mtype) end
     if unitCombatLive and UNIT_COMBAT_COVERS[mtype] then return end
     if not shown(mtype) then return end
     local data, a2, a3 = getCurrentEventInfo()
@@ -1062,29 +1058,3 @@ function ns.Sample(name)
     end
 end
 
-ns.Slash = function(msg)
-    savedStreams()
-    msg = strlower(strtrim(msg or ""))
-    local command, target, direction = msg:match("^(%S+)%s*(%S*)%s*(%S*)$")
-    if command == "anchor" and direction == "" and (target == "" or streams[target]) then
-        setAnchorsShown(target ~= "" and target or nil)
-        print("KPCombatText: drag each box; repeat the anchor command to lock.")
-    elseif command == "direction" and streams[target] and DIRECTIONS[direction] then
-        setDirection(target, direction)
-        print("KPCombatText: " .. target .. " scrolls " .. direction .. ".")
-    elseif msg == "reset" then
-        resetPositions()
-        print("KPCombatText: positions and directions reset.")
-    elseif msg == "test" then
-        preview()
-    elseif msg == "debug" then
-        debugUntil = GetTime() + 30
-        print("KPCombatText: printing combat text event types for 30 s.")
-    elseif msg == "blizz" then
-        print("KPCombatText: Blizzard self combat text " .. (toggleBlizzard() and "ON." or "OFF."))
-    elseif (msg == "" or msg == "options" or msg == "config") and ns.OpenOptions then
-        ns.OpenOptions()
-    else
-        print("Combat text: /mu c (page), /mu p (preview), /mu m [incoming|gains] (move), /mu o (options), /mu b (Blizzard text), /mu c reset, /mu c direction <incoming|gains> <up|down|left|right>")
-    end
-end

@@ -95,7 +95,7 @@ ColorPickerFrame = {}
 
 ---------------------------------------------------------------- load addon
 local ns = {}
-for _, f in ipairs({ "Core.lua", "Plates.lua", "UI.lua" }) do
+for _, f in ipairs({ "Core.lua", "Plates.lua" }) do
     local chunk = assert(loadfile("MirogaUtilities/Modules/FlagPlates/" .. f))
     chunk("KPFlagPlates", { FlagPlates = ns })
 end
@@ -185,10 +185,9 @@ ns.db.colorBar = false; ns.RepaintAll()
 ok(eui1.health.col[3] ~= 1 or eui1.health.col[1] ~= 1 or eui1.health.col[2] ~= 0, "bar off restores")
 ok(eui1.name.col[3] == 1 and eui1.name.col[2] == 0, "name still coloured")
 
--- slash add/del/list, menu
-ns.Slash("add Anna Bell"); ok(ns.Lookup("Anna", "Bell"), "/fp add")
-ns.Slash("del anna bell"); ok(not ns.Lookup("Anna", "Bell"), "/fp del")
-ns.Slash("list")
+-- add/remove, menu
+ns.Add("Anna", "Bell"); ok(ns.Lookup("Anna", "Bell"), "add")
+ns.Remove(ns.Key and ns.Key("Anna", "Bell") or "anna bell"); ok(not ns.Lookup("Anna", "Bell"), "remove")
 ok(Menu.tags.MENU_UNIT_PLAYER, "menu hooked")
 local created = {}
 local root = { CreateDivider = function() end, CreateButton = function(_, t, fn) created[#created + 1] = { t, fn } end }
@@ -196,11 +195,6 @@ units.party1 = { player = true, name = "Menu", surname = "Guy" }
 Menu.tags.MENU_UNIT_PLAYER(nil, root, { unit = "party1" })
 ok(created[1] and created[1][1]:find("Flag player"), "menu offers flag")
 created[1][2](); ok(ns.Lookup("Menu", "Guy"), "menu flag adds")
-
--- UI build + refresh
-ns.ToggleUI(); ok(KPFlagPlatesFrame and KPFlagPlatesFrame.shown, "UI opens")
-ns.RefreshUI()
-ns.ToggleUI(); ok(not KPFlagPlatesFrame.shown, "UI closes")
 
 print(("%d checks, %d failed"):format(checks, fails))
 os.exit(fails == 0 and 0 or 1)

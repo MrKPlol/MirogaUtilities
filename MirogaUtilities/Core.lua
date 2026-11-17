@@ -1,6 +1,5 @@
--- Module switchboard and slash commands. OptionalDeps load the standalone
--- addons first, so a module stays off while its standalone addon is still
--- enabled. The window lives in Hub.lua, which loads after the modules.
+-- Module switchboard and the /mu command. The window lives in Hub.lua,
+-- which loads after the modules.
 local _, root = ...
 
 root.ACCENT = { 0.25, 0.88, 0.82 } -- turquoise, same as the flagged plates
@@ -21,8 +20,7 @@ root.MODULES = {
     { key = "Powershift", label = "Powershift", desc = "Form to form in one key press, travel form included." },
     { key = "FlagPlates", label = "Flagged players", desc = "Turquoise nameplates, alerts and statistics for players on your list." },
     { key = "AutoMark", label = "Auto mark", desc = "Raid marks on your own group." },
-    { key = "VendorCoin", label = "Vendor coin", desc = "Red coin on items the vendor pays more for than the AH." },
-    { key = "Stockpile", label = "Stockpile", desc = "Hold raid materials, cheap price hints, snipe alerts." },
+    { key = "VendorCoin", label = "Vendor coin & stockpile", desc = "Red coin when the vendor pays more than the AH; hold raid materials, cheap hints, snipes." },
     { key = "NaowhTweaks", label = "Naowh tweaks", desc = "Scrolls and buff drinks only in dungeons and raids." },
     { key = "UpdateMerge", label = "Update merge", desc = "After a NaowhUI update: OLD or NEW for every changed setting." },
     { key = "LayerHost", label = "LayerSwap host", desc = "LayerSwap's Host off after login, unless you turned it on yourself." },
@@ -54,85 +52,23 @@ function root.SetModule(key, on)
     MirogaUtilitiesDB.off[key] = (not on) or nil
 end
 
-local standalone = {}
-for module, addon in pairs({ CombatText = "KPCombatText", FlagPlates = "KPFlagPlates" }) do
-    if C_AddOns.IsAddOnLoaded(addon) then
-        standalone[#standalone + 1] = addon
-    else
-        root[module] = {}
-    end
-end
-
-local notice = CreateFrame("Frame")
-notice:RegisterEvent("PLAYER_LOGIN")
-notice:SetScript("OnEvent", function()
-    if #standalone > 0 then
-        table.sort(standalone)
-        Say("Disable " .. table.concat(standalone, " and ") .. " in the addon list. Those modules are off until then.")
-    end
-end)
+root.CombatText, root.FlagPlates = {}, {}
 
 -- ---------------------------------------------------------------------------
--- slash commands: one letter each, the old long forms still work
-
-local TEXT_SHORT = { m = "anchor", p = "test", b = "blizz" }
-local PAGES = { o = "text", e = "events", a = "alerts", s = "shift", u = "merge" }
-
-local function Open(page)
-    if root.OpenHub then root.OpenHub(page) end
-end
-
-local COMMAND_MODULE = {
-    t = "FlagPlates", target = "FlagPlates", f = "FlagPlates", flag = "FlagPlates", a = "FlagPlates",
-    m = "CombatText", p = "CombatText", b = "CombatText", c = "CombatText", text = "CombatText",
-    o = "CombatText", e = "CombatText",
-    r = "AutoMark", mark = "AutoMark", q = "LoginQuiet", quiet = "LoginQuiet",
-    w = "Weather", weather = "Weather", h = "Stockpile", hold = "Stockpile",
-    v = "VendorCoin", vendor = "VendorCoin", s = "Powershift", u = "UpdateMerge",
-}
+-- slash commands: everything lives in the window. Only flagging the target
+-- stays a command, so it works from a macro.
 
 SLASH_MIROGAUTILITIES1 = "/mu"
-SLASH_MIROGAUTILITIES2 = "/miroga"
 SlashCmdList.MIROGAUTILITIES = function(msg)
-    local command, rest = strtrim(msg or ""):match("^(%S*)%s*(.-)$")
-    command = strlower(command)
-    local ct, fp = root.CombatText, root.FlagPlates
-    local module = COMMAND_MODULE[command]
-    if module and root.Stopped(module) then
-        Say(module .. " is off. Turn it on in /mu > Home.")
-        return
-    end
-    if command == "" then
-        if root.ToggleHub then root.ToggleHub() end
-    elseif command == "t" or command == "target" then
-        if fp then fp.ToggleTarget() end
-    elseif command == "f" or command == "flag" then
-        if not fp then return end
-        if rest == "" then Open("players") else fp.Slash(rest) end
-    elseif TEXT_SHORT[command] then
-        if ct then ct.Slash(TEXT_SHORT[command] .. (rest ~= "" and (" " .. rest) or "")) end
-    elseif command == "c" or command == "text" then
-        if not ct then return end
-        if rest == "" then Open("text") else ct.Slash(TEXT_SHORT[rest] or rest) end
-    elseif command == "r" or command == "mark" then
-        if rest == "now" and root.AutoMark then root.AutoMark.Apply(true) else Open("marks") end
-    elseif command == "q" or command == "quiet" then
-        if not root.LoginQuiet then return end
-        if rest == "" then root.LoginQuiet.Show() else Open("quiet") end
-    elseif command == "w" or command == "weather" then
-        if not root.Weather then return end
-        if rest == "" then root.Weather.Toggle() else Open("weather") end
-    elseif command == "h" or command == "hold" then
-        if not root.Stockpile then return end
-        if rest == "o" then Open("stockpile")
-        elseif root.Stockpile.Slash(rest) == false then Say("/mu h (item under mouse), /mu h 12.5 (target), /mu h sync, /mu h o") end
-    elseif command == "v" or command == "vendor" then
-        if not root.VendorCoin then return end
-        if rest == "" then root.VendorCoin.Explain() else Open("vendor") end
-    elseif PAGES[command] then
-        Open(PAGES[command])
-    else
-        Say("/mu (window), /mu t (flag target), /mu f (players), /mu c (combat text), /mu r (auto mark), /mu w (weather low/back), /mu v (vendor or AH), /mu h (hold item), /mu u (update merge), /mu q (hidden login lines), /mu m (move boxes), /mu p (preview)")
+    local command = strlower(strtrim(msg or ""))
+    if command == "t" then
+        if root.Stopped("FlagPlates") then
+            Say("Flagged players is off. Turn it on in /mu > Home.")
+        else
+            root.FlagPlates.ToggleTarget()
+        end
+    elseif root.ToggleHub then
+        root.ToggleHub()
     end
 end
 

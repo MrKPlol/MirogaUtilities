@@ -1,5 +1,5 @@
 -------------------------------------------------------------------------------
---  KPFlagPlates - Core: saved list, name matching, slash commands
+--  KPFlagPlates - Core: saved list, name matching
 --
 --  WoW Forever characters have a first name AND a surname. UnitName(unit)
 --  returns them as (name, surname). An entry can be "First" (matches every
@@ -191,60 +191,11 @@ function ns.ToggleTarget()
     end
     local firstOnly = Key(name)
     if surname and ns.db.entries[firstOnly] then
-        ns.Print("|cffffffff%s|r is already flagged by first name. Use /mu f to edit.", name)
+        ns.Print("|cffffffff%s|r is already flagged by first name. Edit it in /mu.", name)
         return
     end
     ns.Add(name, surname)
     ns.Print("Added |cffffffff%s|r.", ns.DisplayName(ns.db.entries[exact]))
-end
-
--------------------------------------------------------------------------------
---  Slash commands
---    /mu flag            open / close the menu
---    /mu flag add <Name [Surname]>   /mu flag del <Name [Surname]>   /mu flag list
---    /mu target           add target to the list (again = remove)
--------------------------------------------------------------------------------
-local function HandleSlash(msg)
-    msg = Trim(msg or "")
-    local cmd, arg = strmatch(msg, "^(%S+)%s*(.-)$")
-    cmd = cmd and strlower(cmd) or ""
-    if cmd == "" then
-        if ns.ToggleUI then ns.ToggleUI() end
-    elseif cmd == "t" or cmd == "target" then
-        ns.ToggleTarget()
-    elseif cmd == "add" then
-        local first, last = ns.ParseName(arg)
-        if not first then ns.Print("Usage: /mu f add Name [Surname]") return end
-        if ns.Add(first, last) then
-            ns.Print("Added |cffffffff%s|r.", last and (first .. " " .. last) or first)
-        else
-            ns.Print("Already on the list.")
-        end
-    elseif cmd == "del" or cmd == "remove" or cmd == "rm" then
-        local first, last = ns.ParseName(arg)
-        if not first then ns.Print("Usage: /mu f del Name [Surname]") return end
-        if ns.Remove(Key(first, last)) then
-            ns.Print("Removed |cffffffff%s|r.", last and (first .. " " .. last) or first)
-        else
-            ns.Print("Not on the list.")
-        end
-    elseif cmd == "purge" or cmd == "reset" then
-        if ns.ConfirmPurgeStats then ns.ConfirmPurgeStats() end
-    elseif cmd == "list" then
-        local keys = ns.SortedKeys()
-        ns.Print("%d flagged:", #keys)
-        for _, k in ipairs(keys) do
-            DEFAULT_CHAT_FRAME:AddMessage("   " .. ns.DisplayName(ns.db.entries[k]))
-        end
-    else
-        ns.Print("/mu f (list), /mu t (flag target), /mu f add|del Name [Surname], /mu f list, /mu f purge (clear statistics)")
-    end
-end
-
-ns.Slash = HandleSlash
-
-function KPFlagPlates_OnCompartmentClick()
-    if ns.ToggleUI then ns.ToggleUI() end
 end
 
 -------------------------------------------------------------------------------

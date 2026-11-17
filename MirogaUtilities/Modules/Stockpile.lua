@@ -1,6 +1,6 @@
 -- Stockpile: items you keep for later instead of selling them today.
 --
--- * Hold list: your own items (/mu h on the item under the mouse, or the
+-- * Hold list: your own items (your key on the item under the mouse, or the
 --   hub) plus an optional preset of raid materials. Held items get a green
 --   hourglass in the bags instead of the red vendor coin.
 -- * Cheap hint: the tooltip says when today's AH price is far below the
@@ -366,7 +366,7 @@ local function HookTooltips()
 end
 
 -- ---------------------------------------------------------------------------
--- /mu h
+-- hold key
 
 local function MouseItem()
     local ok, _, link = pcall(GameTooltip.GetItem, GameTooltip)
@@ -376,7 +376,7 @@ end
 function sp.ToggleMouse()
     local link = MouseItem()
     if not link then
-        root.Say("Point at an item and press the key (or /mu h) again.")
+        root.Say("Point at an item and press the key again.")
         return
     end
     local held = sp.Toggle(link)
@@ -402,20 +402,6 @@ function sp.ParseMoney(text)
     return found and math.floor(total + 0.5) or nil
 end
 
-function sp.Slash(rest)
-    rest = strtrim(rest or "")
-    if rest == "" then return sp.ToggleMouse() end
-    if rest == "sync" then return sp.SyncAuctionator() end
-    local copper = sp.ParseMoney(rest)
-    local link = MouseItem()
-    if copper and link then
-        sp.SetTarget(link, copper)
-        root.Say(link .. " target " .. Money(copper) .. ".")
-        return
-    end
-    return false
-end
-
 -- ---------------------------------------------------------------------------
 
 local events = CreateFrame("Frame")
@@ -423,7 +409,7 @@ events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function(self, event, addon)
     if event == "ADDON_LOADED" and addon == "MirogaUtilities" then
-        if root.Off("Stockpile", self) then return end
+        if root.Off("VendorCoin", self) then return end -- one switch with the vendor coin, which draws the hourglass
         if type(MirogaStockpileDB) ~= "table" then MirogaStockpileDB = {} end
         local db = MirogaStockpileDB
         for key, value in pairs(sp.DEFAULTS) do

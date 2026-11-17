@@ -71,7 +71,7 @@ local function Apply(low, reason)
     local back = db.saved[CVARS[1]] or "?"
     local why = reason and (" (" .. reason .. ")") or ""
     if low then
-        root.Say(("Weather |cff%slow|r%s. Back to %s with /mu w."):format(root.ACCENT_HEX, why, back))
+        root.Say(("Weather |cff%slow|r%s. Back to %s with your weather key or /mu."):format(root.ACCENT_HEX, why, back))
     else
         root.Say("Weather back to " .. back .. why .. ".")
     end

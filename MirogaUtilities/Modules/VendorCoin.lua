@@ -150,7 +150,7 @@ end
 vc.Mark = Mark
 
 -- ---------------------------------------------------------------------------
--- words for the tooltip and /mu v
+-- words for the tooltip
 
 local function Money(c) return GetMoneyString(math.max(0, math.floor(c + 0.5)), true) end
 
@@ -499,42 +499,6 @@ local function MeasureDeposit()
         end
     end
     if changed then vc.Refresh() end
-end
-
--- ---------------------------------------------------------------------------
--- /mu v: check the item under the mouse, or explain
-
-function vc.Explain(itemLink)
-    if not itemLink then
-        local _, link = GameTooltip:GetItem()
-        itemLink = link
-    end
-    if not itemLink then
-        root.Say("Point at an item in your bags and type /mu v again.")
-        return
-    end
-    if not Auctionator_OK() then
-        root.Say("Auctionator is not loaded.")
-        return
-    end
-    local sp = root.Stockpile
-    if sp and sp.IsHeld(itemLink) then
-        root.Say(itemLink .. ": |cff40ff60held|r for later (Stockpile), no vendor coin.")
-    end
-    local age = sp and sp.ItemAge(sp.ItemID(itemLink))
-    if age and age >= 1 then
-        root.Say(("|cffff9933The AH price is %d %s old.|r"):format(age, age == 1 and "day" or "days"))
-    end
-    local a = vc.Analyze(itemLink)
-    if a == nil then
-        root.Say(itemLink .. ": item data not loaded yet, try again.")
-        return
-    elseif not a then
-        root.Say(itemLink .. ": no vendor price or no AH price.")
-        return
-    end
-    root.Say(itemLink .. ": " .. vc.Summary(a))
-    for _, line in ipairs(vc.Details(a)) do root.Say("  " .. line) end
 end
 
 -- ---------------------------------------------------------------------------

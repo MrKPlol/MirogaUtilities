@@ -934,7 +934,7 @@ local function BuildWeatherPage(page)
             if not ok then Say("Game Menu > Options > Keybindings > AddOns.") end
         end },
     })
-    Note(page, "Key: Keybindings > AddOns > |cff" .. ACCENT_HEX .. "Weather: low / back|r, or /mu w. Fog from the zone's lighting may stay; particles go.")
+    Note(page, "Key: Keybindings > AddOns > |cff" .. ACCENT_HEX .. "Weather: low / back|r. Fog from the zone's lighting may stay; particles go.")
     page:Finish()
 end
 
@@ -960,7 +960,7 @@ local function BuildQuietPage(page)
     page.refreshers[#page.refreshers + 1] = function() count:SetText(tostring(#lq.hidden)) end
 
     ButtonBar(page, { { "Show in chat", 130, function() lq.Show() end, true } })
-    Note(page, "Or type |cff" .. ACCENT_HEX .. "/mu q|r. Takes effect from the next login or /reload.")
+    Note(page, "Takes effect from the next login or /reload.")
     page:Finish()
 end
 
@@ -1026,7 +1026,7 @@ local function BuildVendorPage(page)
             src:SetText("Auctionator")
         end
     end
-    Note(page, "Point at an item and type |cff" .. ACCENT_HEX .. "/mu v|r to see the numbers. Baganator shows them as corner widgets 'Miroga: ...' under Icons; the corner set here wins.")
+    Note(page, "The item tooltip shows the numbers. Baganator shows them as corner widgets 'Miroga: ...' under Icons; the corner set here wins.")
     page:Finish()
 end
 
@@ -1079,8 +1079,7 @@ local function BuildStockpilePage(page)
     ButtonBar(page, {
         { "Send to Auctionator", 170, function() sp.SyncAuctionator() end, true },
     })
-    Note(page, "Bags: point at an item and press your key (Keybindings > AddOns) or type |cff" .. ACCENT_HEX ..
-        "/mu h|r. Target: |cff" .. ACCENT_HEX .. "/mu h 12.5|r = 12g 50s. Auctionator list: |cff" .. ACCENT_HEX .. sp.LIST_NAME .. "|r.")
+    Note(page, "Bags: point at an item and press your key (Keybindings > AddOns). Target price: type it in the list below, 12.5 = 12g 50s. Auctionator list: |cff" .. ACCENT_HEX .. sp.LIST_NAME .. "|r.")
 
     local header = Section(page, "Held items")
     local listTop = page.y
@@ -1390,29 +1389,7 @@ end
 
 local COMMANDS = {
     { "/mu", "open this window" },
-    { "/mu t", "flag / unflag your target" },
-    { "/mu f", "flagged players list" },
-    { "/mu f add Name", "flag by name (del, list too)" },
-    { "/mu f purge", "clear met / killed / deaths" },
-    { "/mu a", "plates, alerts & statistics" },
-    { "/mu c", "combat text settings" },
-    { "/mu e", "combat text events & colors" },
-    { "/mu m", "move combat text boxes (again = lock)" },
-    { "/mu p", "combat text preview" },
-    { "/mu b", "Blizzard's own combat text on / off" },
-    { "/mu s", "powershift keys" },
-    { "/mu r", "auto raid marks" },
-    { "/mu r now", "check the group and mark" },
-    { "/mu w", "weather low / back" },
-    { "/mu q", "show the hidden login lines" },
-    { "/mu w o", "weather settings" },
-    { "/mu v", "vendor or AH? item under the mouse" },
-    { "/mu v o", "vendor coin settings" },
-    { "/mu h", "hold / release item under the mouse" },
-    { "/mu h 12.5", "target price for it (12g 50s)" },
-    { "/mu h sync", "held items to Auctionator's list" },
-    { "/mu h o", "stockpile settings and list" },
-    { "/mu u", "after a Naowh update: OLD or NEW" },
+    { "/mu t", "flag / unflag your target (works in a macro)" },
 }
 
 local function BuildHelpPage(page)
@@ -1425,7 +1402,7 @@ local function BuildHelpPage(page)
         cmd:SetPoint("LEFT", 12, 0)
         cmd:SetText(c[1])
     end
-    Note(page, "The old long forms (/mu target, /mu flag, /mu text) still work. Every setting is account-wide.")
+    Note(page, "Everything else is in this window or under Keybindings > AddOns. Every setting is account-wide.")
     page:Finish()
 end
 
@@ -1518,7 +1495,7 @@ local TABS = {
     { key = "vendor", label = "Vendor coin", sub = "Red coin on items the vendor pays more for than the AH.",
         icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", build = BuildVendorPage },
     { key = "stockpile", label = "Stockpile", sub = "Keep raid materials for later, see cheap prices, snipe them.",
-        icon = "Interface\\Icons\\INV_Relics_Hourglass", module = "Stockpile", build = BuildStockpilePage },
+        icon = "Interface\\Icons\\INV_Relics_Hourglass", module = "VendorCoin", build = BuildStockpilePage },
     { group = "NAOWH" },
     { key = "naowh", label = "Naowh tweaks", sub = "Small changes to Naowh Forever, without touching its files.",
         icon = "Interface\\Icons\\INV_Scroll_03", module = "NaowhTweaks", build = BuildNaowhPage },
@@ -1647,8 +1624,7 @@ local function BuildHub()
             if tab.module and (not root[tab.module] or (root.Stopped and root.Stopped(tab.module))) then
                 b.icon:SetDesaturated(true)
                 b.label:SetAlpha(0.45)
-                Note(page, root[tab.module] and "This module is off. Turn it on under Home, then reload."
-                    or "This module is off while its standalone addon is enabled.")
+                Note(page, "This module is off. Turn it on under Home, then reload.")
                 page:Finish()
             else
                 local ok, err = pcall(tab.build, page)
@@ -1663,7 +1639,7 @@ local function BuildHub()
 
     local hint = Text(side, 11, T.muted, MONO ~= nil)
     hint:SetPoint("BOTTOMLEFT", 20, 14)
-    hint:SetText("/mu  ·  /mu t  ·  /mu f")
+    hint:SetText("/mu  ·  /mu t")
     return f
 end
 
@@ -1708,7 +1684,7 @@ end
 if root.VendorCoin then root.VendorCoin.OnChange = RefreshShopPages end
 if root.Stockpile then root.Stockpile.OnChange = RefreshShopPages end
 
--- a key press or /mu w updates the open weather page
+-- a key press updates the open weather page
 if root.Weather then
     root.Weather.OnChange = function()
         local page = pages.weather
