@@ -25,6 +25,9 @@ root.MODULES = {
     { key = "UpdateMerge", label = "Update merge", desc = "After a NaowhUI update: OLD or NEW for every changed setting." },
     { key = "LayerHost", label = "LayerSwap host", desc = "LayerSwap's Host off after login, unless you turned it on yourself." },
     { key = "Weather", label = "Weather", desc = "One key: storms low, again: your weather back." },
+    { key = "Graphics", label = "Graphics", desc = "Hidden graphics values (grass, sharpening, gamma) written after every login." },
+    { key = "BGQuiet", label = "BG quiet", desc = "In battlegrounds: BugSack muted, join lines, crafting lines, channel notices and \"+\" spam hidden." },
+    { key = "AddonFixes", label = "Addon fixes", desc = "ProcDoc, WIM, Naowh Discovery and HappyCamper errors in battlegrounds stopped at the source." },
     { key = "LoginQuiet", label = "Login quiet", desc = "No addon spam in the chat after login or reload." },
 }
 

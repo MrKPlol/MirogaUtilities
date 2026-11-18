@@ -74,4 +74,24 @@ ok(not lh.armed, "reload does nothing")
 lh.Set("enabled", false); LayerSwapDB.hosting = true; login(true)
 ok(not lh.armed, "module setting off: hands off")
 
+-- no lock after swaps
+lh.Set("enabled", true)
+ok(lh.LockGuarded(), "lock guard on by default")
+LayerSwapDB.hostLockUntil, LayerSwapDB.hostLockWho = now + 240, "Miroga"
+ok(rawget(LayerSwapDB, "hostLockUntil") == nil and rawget(LayerSwapDB, "hostLockWho") == nil, "the lock is never written")
+ok(lh.dropped >= 1 and lh.LockLeft() == 0, "dropped and counted")
+LayerSwapDB.somethingElse = 5
+ok(rawget(LayerSwapDB, "somethingElse") == 5, "other keys pass")
+lh.Set("noLock", false)
+LayerSwapDB.hostLockUntil = now + 240
+ok(rawget(LayerSwapDB, "hostLockUntil") == now + 240 and not lh.LockGuarded(), "switch off: LayerSwap's lock again")
+LayerSwapDB.hostLockUntil = nil; lh.Set("noLock", true)
+-- a lock already running from before the login goes
+local t = { hosting = true, hostLockUntil = now + 100, hostLockWho = "Miroga" }
+LayerSwapDB = t
+ok(lh.GuardLock() and t.hostLockUntil == nil, "running lock removed at start")
+-- someone else's metatable is never replaced
+LayerSwapDB = setmetatable({ hosting = true }, {})
+ok(not lh.GuardLock(), "foreign metatable left alone")
+
 print(n .. " checks, " .. bad .. " failures"); os.exit(bad == 0 and 0 or 1)

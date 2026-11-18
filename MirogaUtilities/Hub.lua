@@ -938,6 +938,92 @@ local function BuildWeatherPage(page)
     page:Finish()
 end
 
+local function BuildGraphicsPage(page)
+    local gx = root.Graphics
+    local function db() return gx.db or gx.DEFAULTS end
+
+    Section(page, "Graphics")
+    ToggleRow(page, "Write after login", "On: the values below are written 4 s after every login. Off: your values from before come back.",
+        function() return db().on end, function(v) gx.SetOn(v) end)
+    local function rows(picture)
+        for _, s in ipairs(gx.SETTINGS) do
+            if (s.picture or false) == picture and gx.Exists(s) then
+                local function get() return tonumber(gx.Wanted(s)) or gx.Current(s) or s.min or 0 end
+                if s.bool then
+                    ToggleRow(page, s.label, s.desc, function() return get() == 1 end,
+                        function(v) gx.SetValue(s, v and 1 or 0) end)
+                else
+                    local fmt = s.step < 1 and function(v) return ("%.2f"):format(v) end or nil
+                    SliderRow(page, s.label, s.desc, s.min, s.max, s.step, get, function(v) gx.SetValue(s, v) end, fmt)
+                end
+            end
+        end
+    end
+    rows(false)
+    Section(page, "Picture")
+    rows(true)
+    ButtonBar(page, {
+        { "Apply now", 110, function() gx.ApplyAll() end, true },
+        { "Restore", 100, function() gx.Restore() end },
+    })
+    Note(page, "A preset or slider change in Options > Graphics can overwrite these values; they come back at the next login. Ideas from Panorama (GPL-3.0).")
+    page:Finish()
+end
+
+local function BuildBGQuietPage(page)
+    local bq = root.BGQuiet
+    local function db() return bq.db or bq.DEFAULTS end
+    local function T(key, label, desc)
+        ToggleRow(page, label, desc, function() return db()[key] end, function(v) bq.Set(key, v) end)
+    end
+    Section(page, "Errors")
+    T("mute", "Mute BugSack inside", "No error sound in battlegrounds. BugSack still records every error (/bugsack).")
+    Section(page, "Chat, only inside")
+    T("crafts", "Hide others' crafting", "\"X creates: Conjured Water\" lines from other players.")
+    T("notices", "Hide channel notices", "\"Changed Channel\" and \"Left Channel\" lines.")
+    T("joins", "Hide join / leave lines", "\"11 players have joined the battle.\" and \"X has left the battle.\"")
+    T("short", "Hide \"+\" spam", "Messages of one or two characters in instance, raid and party chat.")
+    T("arena", "Also in arenas", "Everything above in arenas too.")
+    Section(page, "BigWigs")
+    T("bigwigs", "No \"install Capping\" popup", "Turns off BigWigs' \"Show zone messages\" (it nags for Capping in every battleground). Off here: BigWigs' own setting is left alone.")
+    Section(page, "Status")
+    local row = Row(page, "This match", "Lines hidden since you entered.")
+    local count = Text(row, 13, ACCENT, MONO ~= nil)
+    count:SetPoint("RIGHT", -14, 0)
+    count:SetJustifyH("RIGHT")
+    page.refreshers[#page.refreshers + 1] = function()
+        count:SetText((bq.IsInside() and "inside  " or "outside  ") .. tostring(bq.hiddenCount or 0))
+    end
+    Note(page, "The errors come from other addons that break on Forever's locked values. The tab Addon fixes stops most of them at the source.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
+-- addon fixes
+
+local function BuildFixesPage(page)
+    local af = root.AddonFixes
+    Section(page, "Fixes")
+    for _, fix in ipairs(af.FIXES) do
+        local key = fix.key
+        local row = ToggleRow(page, fix.label, fix.desc,
+            function() return (af.db or af.DEFAULTS)[key] ~= false end, function(v) af.Set(key, v) end)
+        local state = Text(row, 11, T.muted, MONO ~= nil)
+        state:SetPoint("RIGHT", -70, 0)
+        state:SetJustifyH("RIGHT")
+        row.desc:SetPoint("RIGHT", state, "LEFT", -12, 0)
+        page.refreshers[#page.refreshers + 1] = function()
+            if not af.installed[key] then
+                state:SetText(C_AddOns.IsAddOnLoaded(fix.addon) and "|cffff5050not hooked|r" or "not loaded")
+            else
+                state:SetText(("|cff%s%dx|r"):format(ACCENT_HEX, af.hits[key] or 0))
+            end
+        end
+    end
+    Note(page, "The number is how often a fix stepped in this session. Nothing is hidden: the addon simply never touches the data the game locked. Switching a fix off works at once.")
+    page:Finish()
+end
+
 -- ---------------------------------------------------------------------------
 -- login quiet
 
@@ -1170,6 +1256,8 @@ local function BuildNaowhPage(page)
         function() return db().scrollsInstanceOnly end, function(v) nt.Set("scrollsInstanceOnly", v) end)
     ToggleRow(page, "Buff drinks only in dungeons and raids", "Kreeg's Stout, Rumsey Rum, Juju, Zanza and the other buff items stay away in the open world.",
         function() return db().drinksInstanceOnly end, function(v) nt.Set("drinksInstanceOnly", v) end)
+    ToggleRow(page, "Nothing in battlegrounds and arenas", "No food, flask, scroll, drink or buff reminders in PvP. Naowh itself has no PvP switch.",
+        function() return db().noneInPvP end, function(v) nt.Set("noneInPvP", v) end)
     Section(page, "RestedXP")
     ToggleRow(page, "/rxp hide hides Naowh's guide window too", "With Naowh's RXP skin, /rxp hide left its list on screen. Now it goes and comes back with /rxp show.",
         function() return db().rxpHide end, function(v) nt.Set("rxpHide", v) end)
@@ -1418,6 +1506,8 @@ local function BuildLayerPage(page)
     Section(page, "Host")
     ToggleRow(page, "Host off after login", "LayerSwap turns Host on at every login. This turns it off at your first click, unless you turned it on yourself.",
         function() return db().enabled end, function(v) lh.Set("enabled", v) end)
+    ToggleRow(page, "No lock after swaps", "LayerSwap holds Host on 4 min after every swap. This drops the lock: Host goes off again as soon as you leave the host's group.",
+        function() return db().noLock ~= false end, function(v) lh.Set("noLock", v); lh.GuardLock() end)
     local function StatusRow(label, desc, get)
         local row = Row(page, label, desc)
         local t = Text(row, 12, ACCENT, MONO ~= nil)
@@ -1432,6 +1522,10 @@ local function BuildLayerPage(page)
         local left = lh.LockLeft()
         if lh.Hosting() and left > 0 then return ("on, %d:%02d after your swap"):format(math.floor(left / 60), left % 60) end
         return lh.Hosting() and "on" or "off"
+    end)
+    StatusRow("Locks dropped", "Swap locks LayerSwap wanted this session.", function()
+        if not lh.LockGuarded() then return db().noLock == false and "off" or "-" end
+        return tostring(lh.dropped or 0)
     end)
     StatusRow("At the next login", "What you leave it at when you log out.", function()
         if not db().enabled then return "LayerSwap decides (on)" end
@@ -1455,15 +1549,13 @@ local function BuildHomePage(page)
     for _, m in ipairs(root.MODULES) do
         local key = m.key
         local start = not root.IsOff(key)
-        local unavailable = (key == "CombatText" or key == "FlagPlates") and not root[key]
-        local row = ToggleRow(page, m.label, unavailable and "Off while its standalone addon is enabled." or m.desc,
+        ToggleRow(page, m.label, m.desc,
             function() return not root.IsOff(key) end,
             function(v)
                 root.SetModule(key, v)
                 if v == start then changed[key] = nil else changed[key] = true end
                 update()
             end)
-        if unavailable then row.name:SetTextColor(1, 1, 1, 0.4) end
     end
     page.y = page.y - 6
     reloadRow = Row(page, "|cffffcc00Changes start after a reload.|r", nil, 34)
@@ -1474,58 +1566,123 @@ local function BuildHomePage(page)
     BuildHelpPage(page)   -- the slash commands below the switches
 end
 
+-- sidebar entries; an entry with subs gets a small tab strip in its header.
+-- Sub keys stay the page keys, so OpenHub("weather") still works.
 local TABS = {
     { key = "home", label = "Home", sub = "Modules on or off, and every slash command.",
         icon = "Interface\\Icons\\Ability_Druid_CatForm", build = BuildHomePage },
     { group = "COMBAT" },
-    { key = "text", label = "Combat text", sub = "Damage, heals, buffs and debuffs on you: boxes, font, timing.",
-        icon = "Interface\\Icons\\Spell_Fire_FlameBolt", module = "CombatText", build = BuildTextPage },
-    { key = "events", label = "Events & colors", sub = "What shows up, and in which color.",
-        icon = "Interface\\Icons\\INV_Misc_Gem_Variety_01", module = "CombatText", build = BuildEventsPage },
+    { key = "combat", label = "Combat text", icon = "Interface\\Icons\\Spell_Fire_FlameBolt", module = "CombatText", subs = {
+        { key = "text", label = "Display", sub = "Damage, heals, buffs and debuffs on you: boxes, font, timing.", build = BuildTextPage },
+        { key = "events", label = "Events & colors", sub = "What shows up, and in which color.", build = BuildEventsPage },
+    } },
     { key = "shift", label = "Powershift", sub = "Form to form in one key press, without the action bar bug.",
         icon = "Interface\\Icons\\Ability_Druid_CatForm", module = "Powershift", build = BuildShiftPage },
     { group = "PLAYERS & GROUP" },
-    { key = "players", label = "Flagged players", sub = "Everyone on this list gets marked nameplates, alerts and statistics.",
-        icon = "Interface\\Icons\\Ability_Hunter_SniperShot", module = "FlagPlates", build = BuildPlayersPage },
-    { key = "alerts", label = "Plates & alerts", sub = "Plate color, sound, chat message and statistics.",
-        icon = "Interface\\Icons\\Spell_Holy_SealOfWisdom", module = "FlagPlates", build = BuildAlertsPage },
+    { key = "flagged", label = "Flagged players", icon = "Interface\\Icons\\Ability_Hunter_SniperShot", module = "FlagPlates", subs = {
+        { key = "players", label = "List", sub = "Everyone on this list gets marked nameplates, alerts and statistics.", build = BuildPlayersPage },
+        { key = "alerts", label = "Plates & alerts", sub = "Plate color, sound, chat message and statistics.", build = BuildAlertsPage },
+    } },
     { key = "marks", label = "Auto mark", sub = "Raid marks on your own group, nobody else in it.",
         icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1", module = "AutoMark", build = BuildMarksPage },
-    { group = "BAGS & GOLD" },
-    { key = "vendor", label = "Vendor coin", sub = "Red coin on items the vendor pays more for than the AH.",
-        icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", build = BuildVendorPage },
-    { key = "stockpile", label = "Stockpile", sub = "Keep raid materials for later, see cheap prices, snipe them.",
-        icon = "Interface\\Icons\\INV_Relics_Hourglass", module = "VendorCoin", build = BuildStockpilePage },
-    { group = "NAOWH" },
-    { key = "naowh", label = "Naowh tweaks", sub = "Small changes to Naowh Forever, without touching its files.",
-        icon = "Interface\\Icons\\INV_Scroll_03", module = "NaowhTweaks", build = BuildNaowhPage },
-    { key = "merge", label = "Update merge", sub = "After a Naowh update: OLD or NEW for every setting that changed.",
-        icon = "Interface\\Icons\\INV_Misc_Book_09", module = "UpdateMerge", build = BuildMergePage },
+    { group = "GOLD & UI" },
+    { key = "gold", label = "Vendor & stockpile", icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", subs = {
+        { key = "vendor", label = "Vendor coin", sub = "Red coin on items the vendor pays more for than the AH.", build = BuildVendorPage },
+        { key = "stockpile", label = "Stockpile", sub = "Keep raid materials for later, see cheap prices, snipe them.", build = BuildStockpilePage },
+    } },
+    { key = "naowhgroup", label = "Naowh", icon = "Interface\\Icons\\INV_Scroll_03", subs = {
+        { key = "naowh", label = "Tweaks", module = "NaowhTweaks", sub = "Small changes to Naowh Forever, without touching its files.", build = BuildNaowhPage },
+        { key = "merge", label = "Update merge", module = "UpdateMerge", sub = "After a Naowh update: OLD or NEW for every setting that changed.", build = BuildMergePage },
+    } },
     { group = "WORLD & CHAT" },
-    { key = "layer", label = "LayerSwap host", sub = "Host off by default, on only when you turn it on.",
-        icon = "Interface\\Icons\\Spell_Arcane_PortalDalaran", module = "LayerHost", build = BuildLayerPage },
-    { key = "weather", label = "Weather", sub = "One click: storms low. Next click: your old weather back.",
-        icon = "Interface\\Icons\\Spell_Frost_IceStorm", module = "Weather", build = BuildWeatherPage },
-    { key = "quiet", label = "Login quiet", sub = "No addon spam in the chat after login or /reload.",
-        icon = "Interface\\Icons\\INV_Misc_Note_02", module = "LoginQuiet", build = BuildQuietPage },
+    { key = "world", label = "World", icon = "Interface\\Icons\\INV_Misc_Spyglass_03", subs = {
+        { key = "graphics", label = "Graphics", module = "Graphics", sub = "Fuller grass, sharper picture, gamma: written after every login.", build = BuildGraphicsPage },
+        { key = "weather", label = "Weather", module = "Weather", sub = "One click: storms low. Next click: your old weather back.", build = BuildWeatherPage },
+        { key = "layer", label = "LayerSwap", module = "LayerHost", sub = "Host off by default, on only when you turn it on.", build = BuildLayerPage },
+    } },
+    { key = "chat", label = "Quiet & fixes", icon = "Interface\\Icons\\INV_Misc_Note_02", subs = {
+        { key = "quiet", label = "Login", module = "LoginQuiet", sub = "No addon spam in the chat after login or /reload.", build = BuildQuietPage },
+        { key = "bgquiet", label = "Battlegrounds", module = "BGQuiet", sub = "Battlegrounds without error sounds and chat spam.", build = BuildBGQuietPage },
+        { key = "fixes", label = "Addon fixes", module = "AddonFixes", sub = "Other addons' battleground errors stopped at the source.", build = BuildFixesPage },
+    } },
 }
 
 local hub, current
 local tabButtons, pages = {}, {}
+local parentOf, lastSub = {}, {}   -- page key -> sidebar key, sidebar key -> last page
+
+local function IsStopped(module)
+    return module and (not root[module] or (root.Stopped and root.Stopped(module))) or false
+end
 
 local function SelectTab(key)
-    if not pages[key] then key = "home" end
+    if not pages[key] then
+        key = lastSub[key] or key
+        if not pages[key] then
+            for _, tab in ipairs(TABS) do
+                if tab.key == key and tab.subs then key = tab.subs[1].key end
+            end
+        end
+        if not pages[key] then key = "home" end
+    end
     current = key
-    for _, tab in ipairs(TABS) do
-        if tab.key then
-            local b, on = tabButtons[tab.key], tab.key == key
-            b.marker:SetShown(on)
-            b.fill:SetShown(on)
-            b.label:SetTextColor(1, 1, 1, on and 1 or 0.6)
-            b.icon:SetAlpha(on and 1 or 0.6)
-            pages[tab.key]:SetShown(on)
+    local parent = parentOf[key]
+    lastSub[parent] = key
+    for tabKey, b in pairs(tabButtons) do
+        local on = tabKey == parent
+        b.marker:SetShown(on)
+        b.fill:SetShown(on)
+        b.label:SetTextColor(1, 1, 1, on and 1 or 0.6)
+        b.icon:SetAlpha(on and 1 or 0.6)
+    end
+    for pageKey, page in pairs(pages) do page:SetShown(pageKey == key) end
+end
+
+-- small segmented strip at the top right of a page header
+local function SubStrip(page, tab, ownKey)
+    local last
+    for i = #tab.subs, 1, -1 do
+        local sub = tab.subs[i]
+        local b = CreateFrame("Button", nil, page)
+        b:SetHeight(24)
+        local label = Text(b, 12)
+        label:SetPoint("CENTER")
+        label:SetText(sub.label)
+        b:SetWidth(math.max(70, label:GetStringWidth() + 22))
+        if last then b:SetPoint("RIGHT", last, "LEFT", -4, 0) else b:SetPoint("TOPRIGHT", page, "TOPRIGHT", -PAD - 30, -24) end
+        last = b
+        local fill = Fill(b, { 1, 1, 1, 0.05 })
+        fill:SetAllPoints()
+        local line = Fill(b, { ACCENT[1], ACCENT[2], ACCENT[3], 1 }, "ARTWORK")
+        line:SetPoint("BOTTOMLEFT")
+        line:SetPoint("BOTTOMRIGHT")
+        line:SetHeight(2)
+        local stopped = IsStopped(sub.module or tab.module)
+        function b:SetActive(on)
+            line:SetShown(on)
+            fill:SetColorTexture(on and ACCENT[1] or 1, on and ACCENT[2] or 1, on and ACCENT[3] or 1, on and 0.16 or 0.05)
+            label:SetTextColor(1, 1, 1, on and 1 or (stopped and 0.35 or 0.6))
+        end
+        b:SetActive(sub.key == ownKey)
+        b:SetScript("OnClick", function() SelectTab(sub.key) end)
+    end
+end
+
+local function BuildPage(content, tab, spec, parentKey)
+    local page = NewPage(content, tab.label, spec.sub)
+    pages[spec.key] = page
+    parentOf[spec.key] = parentKey
+    if IsStopped(spec.module or tab.module) then
+        Note(page, "This module is off. Turn it on under Home, then reload.")
+        page:Finish()
+    else
+        local ok, err = pcall(spec.build, page)
+        if not ok then
+            Note(page, "|cffff6666This page failed to build:|r " .. tostring(err))
+            page:Finish()
         end
     end
+    if tab.subs then SubStrip(page, tab, spec.key) end
 end
 
 local function BuildHub()
@@ -1619,19 +1776,22 @@ local function BuildHub()
             b.label:SetText(tab.label)
             tabButtons[tab.key] = b
 
-            local page = NewPage(content, tab.label, tab.sub)
-            pages[tab.key] = page
-            if tab.module and (not root[tab.module] or (root.Stopped and root.Stopped(tab.module))) then
+            local stopped
+            if tab.subs then
+                stopped = IsStopped(tab.module)
+                local all = true
+                for _, spec in ipairs(tab.subs) do
+                    BuildPage(content, tab, spec, tab.key)
+                    if not IsStopped(spec.module or tab.module) then all = false end
+                end
+                stopped = stopped or all
+            else
+                BuildPage(content, tab, tab, tab.key)
+                stopped = IsStopped(tab.module)
+            end
+            if stopped then
                 b.icon:SetDesaturated(true)
                 b.label:SetAlpha(0.45)
-                Note(page, "This module is off. Turn it on under Home, then reload.")
-                page:Finish()
-            else
-                local ok, err = pcall(tab.build, page)
-                if not ok then
-                    Note(page, "|cffff6666This page failed to build:|r " .. tostring(err))
-                    page:Finish()
-                end
             end
             b:SetScript("OnClick", function() SelectTab(tab.key) end)
         end
@@ -1688,6 +1848,20 @@ if root.Stockpile then root.Stockpile.OnChange = RefreshShopPages end
 if root.Weather then
     root.Weather.OnChange = function()
         local page = pages.weather
+        if page and page:IsVisible() then page:Refresh() end
+    end
+end
+
+if root.LayerHost then
+    root.LayerHost.OnChange = function()
+        local page = pages.layer
+        if page and page:IsVisible() then page:Refresh() end
+    end
+end
+
+if root.Graphics then
+    root.Graphics.OnChange = function()
+        local page = pages.graphics
         if page and page:IsVisible() then page:Refresh() end
     end
 end

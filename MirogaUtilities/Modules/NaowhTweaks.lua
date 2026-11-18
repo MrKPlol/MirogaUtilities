@@ -11,7 +11,15 @@ local _, root = ...
 local nt = {}
 root.NaowhTweaks = nt
 
-nt.DEFAULTS = { scrollsInstanceOnly = true, drinksInstanceOnly = true, rxpHide = true }
+nt.DEFAULTS = { scrollsInstanceOnly = true, drinksInstanceOnly = true, rxpHide = true, noneInPvP = true }
+
+-- Naowh has no PvP switch: in battlegrounds and arenas its reminders fall back
+-- to the "World" settings. noneInPvP empties the whole row there (food,
+-- flasks, scrolls, drinks, sleeping bag, buffs).
+local function InPvP()
+    local _, kind = IsInInstance()
+    return kind == "pvp" or kind == "arena"
+end
 
 -- row key -> setting that keeps it to dungeons and raids
 local INSTANCE_ONLY = { scroll = "scrollsInstanceOnly", other = "drinksInstanceOnly" }
@@ -40,6 +48,10 @@ local function Wrap()
     buffs.Collect = function(...)
         local list = original(...)
         local db = nt.db
+        if type(list) == "table" and db and db.noneInPvP and InPvP() then
+            for i = #list, 1, -1 do list[i] = nil end
+            return list
+        end
         if type(list) == "table" and db and not InDungeonOrRaid() then
             for i = #list, 1, -1 do
                 local setting = type(list[i]) == "table" and INSTANCE_ONLY[list[i].key]

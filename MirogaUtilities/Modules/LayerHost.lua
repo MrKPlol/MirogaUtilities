@@ -9,6 +9,14 @@
 -- (hostForced) and no 4 min lock runs. Then it stays on at the next login,
 -- until you turn it off again.
 --
+-- The lock: since 1.14.25 LayerSwap holds Host on for 4 min after every swap
+-- and refuses Host off meanwhile (LayerSwapDB.hostLockUntil). With "No lock
+-- after swaps" the lock is never written: a metatable on LayerSwapDB drops
+-- the two lock keys. When the ask had turned Host on for you (hostForced),
+-- LayerSwap's own Host.release then turns it off a few seconds after you left
+-- the host's group, instead of 4 min later. While your own ask runs Host shows
+-- on, but LayerSwap invites nobody then (canInvite: own ask waiting).
+--
 -- The off goes through /ls off at your first click or movement key after the login:
 -- LayerSwap may join or leave a chat channel there, which the game allows
 -- only inside a real click. Nothing is changed in LayerSwap's files.
@@ -16,7 +24,7 @@ local _, root = ...
 local lh = {}
 root.LayerHost = lh
 
-lh.DEFAULTS = { enabled = true, wantHost = false }
+lh.DEFAULTS = { enabled = true, wantHost = false, noLock = true }
 
 local function Present()
     return type(LayerSwapDB) == "table" and SlashCmdList and type(SlashCmdList.LAYERSWAP) == "function"
@@ -36,6 +44,42 @@ function lh.Busy()
 end
 
 lh.armed = false
+lh.dropped = 0   -- locks dropped this session
+
+local LOCK_KEYS = { hostLockUntil = true, hostLockWho = true }
+local function LockWanted()
+    return not (lh.db and lh.db.enabled and lh.db.noLock)
+end
+
+-- the metatable is only ever added to LayerSwap's saved table, never to one
+-- that already has a metatable of its own
+function lh.GuardLock()
+    if not Present() or LockWanted() then return false end
+    local t = LayerSwapDB
+    local mt = getmetatable(t)
+    if mt then return mt.mirogaLock == true end
+    if rawget(t, "hostLockUntil") ~= nil then
+        rawset(t, "hostLockUntil", nil)
+        rawset(t, "hostLockWho", nil)
+        lh.dropped = lh.dropped + 1
+    end
+    setmetatable(t, { mirogaLock = true, __newindex = function(tbl, key, value)
+        if LOCK_KEYS[key] and value ~= nil and not LockWanted() then
+            if key == "hostLockUntil" then
+                lh.dropped = lh.dropped + 1
+                if lh.OnChange then lh.OnChange() end
+            end
+            return
+        end
+        rawset(tbl, key, value)
+    end })
+    return true
+end
+
+function lh.LockGuarded()
+    local mt = Present() and getmetatable(LayerSwapDB)
+    return mt and mt.mirogaLock == true and not LockWanted() or false
+end
 
 -- runs inside a click; true when it turned Host off
 function lh.TryOff()
@@ -44,6 +88,42 @@ function lh.TryOff()
     if not lh.Hosting() then lh.armed = false; return false end
     if InCombatLockdown() or lh.Busy() then return false end   -- next click
     lh.armed = false
+lh.dropped = 0   -- locks dropped this session
+
+local LOCK_KEYS = { hostLockUntil = true, hostLockWho = true }
+local function LockWanted()
+    return not (lh.db and lh.db.enabled and lh.db.noLock)
+end
+
+-- the metatable is only ever added to LayerSwap's saved table, never to one
+-- that already has a metatable of its own
+function lh.GuardLock()
+    if not Present() or LockWanted() then return false end
+    local t = LayerSwapDB
+    local mt = getmetatable(t)
+    if mt then return mt.mirogaLock == true end
+    if rawget(t, "hostLockUntil") ~= nil then
+        rawset(t, "hostLockUntil", nil)
+        rawset(t, "hostLockWho", nil)
+        lh.dropped = lh.dropped + 1
+    end
+    setmetatable(t, { mirogaLock = true, __newindex = function(tbl, key, value)
+        if LOCK_KEYS[key] and value ~= nil and not LockWanted() then
+            if key == "hostLockUntil" then
+                lh.dropped = lh.dropped + 1
+                if lh.OnChange then lh.OnChange() end
+            end
+            return
+        end
+        rawset(tbl, key, value)
+    end })
+    return true
+end
+
+function lh.LockGuarded()
+    local mt = Present() and getmetatable(LayerSwapDB)
+    return mt and mt.mirogaLock == true and not LockWanted() or false
+end
     SlashCmdList.LAYERSWAP("off")
     if not lh.Hosting() then
         root.Say("LayerSwap Host is off (your default). Click Host in LayerSwap to keep it on.")
@@ -95,6 +175,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
             if db[key] == nil then db[key] = value end
         end
         lh.db = db
+        lh.GuardLock()
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
         self:RegisterEvent("PLAYER_LOGOUT")
         return
@@ -106,6 +187,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
     -- PLAYER_ENTERING_WORLD: only a real login turns LayerSwap's Host on
     local isLogin = arg1
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    lh.GuardLock()
     if not isLogin or not Present() or not lh.db.enabled or lh.db.wantHost then return end
     lh.armed = true
     Hook()
