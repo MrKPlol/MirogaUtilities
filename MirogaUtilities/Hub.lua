@@ -1022,7 +1022,7 @@ local function BuildFriendTipsPage(page)
     page.refreshers[#page.refreshers + 1] = function()
         state:SetText(ft.hooked and ("hooked, shown " .. (ft.shown or 0) .. "x") or "|cffff5050not found|r")
     end
-    Note(page, "Changes show at the next hover. Uses EllesmereUI's own tooltip, so it follows its background and font settings.")
+    Note(page, "Changes show at the next hover. Uses the game tooltip, which EllesmereUI skins like every other tooltip. Friends logged in with two characters show both.")
     page:Finish()
 end
 

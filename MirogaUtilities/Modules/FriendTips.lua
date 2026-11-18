@@ -1,13 +1,16 @@
 -- Friend tooltips: EllesmereUI's own friends list (since 9.8.9) shows a slim
--- tooltip on its rows. This one shows what Blizzard's card showed and more,
--- with class, faction and zone icons, in EllesmereUI's own tooltip frame (its
--- background, border and font), so it looks like the rest of the UI.
+-- tooltip on its rows. This one shows what Blizzard's card showed and more:
+-- every WoW character the friend is logged in with (two clients at once),
+-- class, level, race, faction, zone, realm, group, note and broadcast, with
+-- class, faction and zone icons.
 --
--- How: EllesmereUI_FriendsList.lua calls EllesmereUI.ShowWidgetTooltip(row,
--- text, opts) by table lookup on every hover. The wrapper swaps the text when
--- the row carries a friend record (row.rec.info, a Battle.net account info),
--- and passes everything else through. Nothing in EllesmereUI's files changes;
--- if building the text fails, EllesmereUI's own text shows.
+-- It uses the game tooltip, which EllesmereUI reskins like every other
+-- tooltip (background, black border, font size), so it looks like the rest
+-- of the UI. EllesmereUI_FriendsList.lua calls EllesmereUI.ShowWidgetTooltip /
+-- HideWidgetTooltip by table lookup on every hover: the wrappers show and hide
+-- ours for rows carrying a friend record (row.rec.info) and pass everything
+-- else through. Nothing in EllesmereUI's files changes; if ours fails,
+-- EllesmereUI's own tooltip shows.
 local _, root = ...
 local ft = {}
 root.FriendTips = ft
@@ -31,9 +34,9 @@ local FACTION_ICON = {
     Horde = "Interface\\FriendsFrame\\PlusManz-Horde",
 }
 local CLASS_TEX = "Interface\\WorldStateFrame\\Icons-Classes"
-local ZONE_ICON = "|TInterface\\Icons\\INV_Misc_Map_01:12:12:0:0:64:64:5:59:5:59|t "
-local GROUP_ICON = "|TInterface\\Icons\\Spell_Holy_PrayerOfSpirit:12:12:0:0:64:64:5:59:5:59|t "
-local SIZE = 12
+local ZONE_ICON = "|TInterface\\Icons\\INV_Misc_Map_01:16:16:0:0:64:64:5:59:5:59|t "
+local GROUP_ICON = "|TInterface\\Icons\\Spell_Holy_PrayerOfSpirit:16:16:0:0:64:64:5:59:5:59|t "
+local SIZE = 16
 
 local function Hex(c)
     if not c then return nil end
@@ -123,83 +126,152 @@ local function LastOnline(info)
     end
 end
 
--- the tooltip text for one friend record
-function ft.Build(rec)
-    local info = rec and rec.info
-    if type(info) ~= "table" then return nil end
-    local gi = type(info.gameAccountInfo) == "table" and info.gameAccountInfo or nil
-    local db = ft.db or ft.DEFAULTS
-    local icons = db.icons
-    local lines = {}
-    local function Add(text) lines[#lines + 1] = text end
-
-    local fav = info.isFavorite and " |cffffd100*|r" or ""
-    Add(("|cff%s%s|r%s"):format(BNET_HEX, AccountName(info), fav))
-
-    if SameGame(gi) and Str(gi.characterName) then
-        local file = ClassFile(info, gi)
-        local nameLine = (icons and file and ClassIcon(file) or "") ..
-            ("|cff%s%s|r"):format(file and ClassHex(file) or "ffffff", gi.characterName)
-        local realm = db.realm and RealmText(info, gi)
-        if realm then nameLine = nameLine .. ("|cff%s - %s|r"):format(DIM_HEX, realm) end
-        Add(nameLine)
-
-        local level = Num(gi.characterLevel)
-        local parts = {}
-        if level then parts[#parts + 1] = ("|cff%sLevel %d|r"):format(LevelHex(level), level) end
-        if db.race and Str(gi.raceName) then parts[#parts + 1] = gi.raceName end
-        if Str(gi.className) then parts[#parts + 1] = ("|cff%s%s|r"):format(file and ClassHex(file) or "ffffff", gi.className) end
-        if #parts > 0 then Add(table.concat(parts, " ")) end
-
-        local faction = Str(gi.factionName)
-        if faction then
-            local icon = icons and FACTION_ICON[faction] and ("|T%s:%d:%d|t "):format(FACTION_ICON[faction], SIZE, SIZE) or ""
-            Add(icon .. ("|cff%s%s|r"):format(FACTION_HEX[faction] or "ffffff", faction))
+-- every WoW character the friend is logged in with (a friend can run two
+-- clients at once), same game first; other games come as rich presence
+function ft.GameAccounts(rec)
+    local info = rec.info
+    local list, seen = {}, {}
+    local count = C_BattleNet and C_BattleNet.GetFriendNumGameAccounts and Num(rec.index)
+        and C_BattleNet.GetFriendNumGameAccounts(rec.index)
+    if Num(count) and count > 0 then
+        for i = 1, count do
+            local gi = C_BattleNet.GetFriendGameAccountInfo(rec.index, i)
+            local id = gi and Num(gi.gameAccountID)
+            if type(gi) == "table" and gi.isOnline and not (id and seen[id]) then
+                if id then seen[id] = true end
+                list[#list + 1] = gi
+            end
         end
-        if Str(gi.areaName) then Add((icons and ZONE_ICON or "") .. gi.areaName) end
-        if gi.isInCurrentPlayerGroup then Add((icons and GROUP_ICON or "") .. ("|cff%sIn your group|r"):format(ACCENT_HEX)) end
-    elseif gi and gi.isOnline then
-        local presence = Str(gi.richPresence)
-        if presence then Add(("|cff%s%s|r"):format(LABEL_HEX, presence)) end
-    else
-        local last = LastOnline(info)
-        Add(("|cff%s%s|r"):format(DIM_HEX, last or "Offline"))
     end
-
-    if db.note then
-        local note = Str(info.note)
-        if note and EllesmereUI and EllesmereUI.StripFriendNoteTag then
-            local ok, stripped = pcall(EllesmereUI.StripFriendNoteTag, note)
-            if ok then note = Str(stripped) end
-        end
-        if note then Add(("|cff%sNote:|r %s"):format(DIM_HEX, note)) end
+    local main = type(info.gameAccountInfo) == "table" and info.gameAccountInfo or nil
+    if #list == 0 and main and main.isOnline then list[1] = main end
+    -- same game first, the character Battle.net names as the main one first
+    local mainID = main and Num(main.gameAccountID)
+    local function rank(gi)
+        if not SameGame(gi) then return 2 end
+        return (mainID and Num(gi.gameAccountID) == mainID) and 0 or 1
     end
-    if db.broadcast then
-        local text = Str(info.customMessage)
-        if text then Add(("|cff%s%s|r"):format(BNET_HEX, text)) end
-    end
-    return table.concat(lines, "\n")
+    table.sort(list, function(a, b)
+        local ra, rb = rank(a), rank(b)
+        if ra ~= rb then return ra < rb end
+        return (Str(a.characterName) or "") < (Str(b.characterName) or "")
+    end)
+    return list
 end
 
-local TIP_OPTS = { anchor = "right", justify = "LEFT", width = 240 }
+local function Status(info, games)
+    if #games == 0 then return ("|cff%sOffline|r"):format(DIM_HEX) end
+    if info.isDND then return "|cffff4040Busy|r" end
+    if info.isAFK then return "|cffffd100Away|r" end
+    return "|cff40ff40Online|r"
+end
+
+-- fills the game tooltip for one friend record; false when nothing to show
+function ft.Fill(tip, rec)
+    local info = rec and rec.info
+    if type(info) ~= "table" then return false end
+    local db = ft.db or ft.DEFAULTS
+    local icons = db.icons
+    local games = ft.GameAccounts(rec)
+
+    local fav = info.isFavorite and " |cffffd100*|r" or ""
+    tip:AddDoubleLine(("|cff%s%s|r%s"):format(BNET_HEX, AccountName(info), fav), Status(info, games))
+
+    local shownChar = false
+    for _, gi in ipairs(games) do
+        if SameGame(gi) and Str(gi.characterName) then
+            if shownChar then tip:AddLine(" ") end
+            shownChar = true
+            local file = ClassFile({ gameAccountInfo = gi }, gi)
+            local classHex = file and ClassHex(file) or "ffffff"
+            local level = Num(gi.characterLevel)
+            local afk = gi.isGameAFK and (" |cff%s(AFK)|r"):format(DIM_HEX) or (gi.isGameBusy and (" |cff%s(Busy)|r"):format(DIM_HEX)) or ""
+            tip:AddDoubleLine((icons and file and ClassIcon(file) or "") .. ("|cff%s%s|r"):format(classHex, gi.characterName) .. afk,
+                level and ("|cff%sLevel %d|r"):format(LevelHex(level), level) or "")
+            local who = {}
+            if db.race and Str(gi.raceName) then who[#who + 1] = gi.raceName end
+            if Str(gi.className) then who[#who + 1] = ("|cff%s%s|r"):format(classHex, gi.className) end
+            local faction = Str(gi.factionName)
+            local right = ""
+            if faction then
+                right = (icons and FACTION_ICON[faction] and ("|T%s:%d:%d|t "):format(FACTION_ICON[faction], SIZE, SIZE) or "")
+                    .. ("|cff%s%s|r"):format(FACTION_HEX[faction] or "ffffff", faction)
+            end
+            tip:AddDoubleLine(table.concat(who, " "), right, 1, 1, 1)
+            local realm = db.realm and RealmText({ gameAccountInfo = gi }, gi)
+            if Str(gi.areaName) or realm then
+                tip:AddDoubleLine((Str(gi.areaName) and ((icons and ZONE_ICON or "") .. gi.areaName) or ""),
+                    realm and ("|cff%s%s|r"):format(DIM_HEX, realm) or "", 1, 1, 1)
+            end
+            if gi.isInCurrentPlayerGroup then
+                tip:AddLine((icons and GROUP_ICON or "") .. ("|cff%sIn your group|r"):format(ACCENT_HEX))
+            end
+        end
+    end
+    for _, gi in ipairs(games) do
+        if not SameGame(gi) then
+            local presence = Str(gi.richPresence) or Str(gi.clientProgram)
+            if presence then tip:AddLine(("|cff%s%s|r"):format(LABEL_HEX, presence), 1, 1, 1, true) end
+        end
+    end
+    if #games == 0 then
+        local last = LastOnline(info)
+        if last then tip:AddLine(("|cff%s%s|r"):format(DIM_HEX, last)) end
+    end
+
+    local note = db.note and Str(info.note)
+    if note and EllesmereUI and EllesmereUI.StripFriendNoteTag then
+        local ok, stripped = pcall(EllesmereUI.StripFriendNoteTag, note)
+        if ok then note = Str(stripped) end
+    end
+    local broadcast = db.broadcast and Str(info.customMessage)
+    if note or broadcast then tip:AddLine(" ") end
+    if note then tip:AddLine(("|cff%sNote:|r %s"):format(DIM_HEX, note), 1, 1, 1, true) end
+    if broadcast then tip:AddLine(("|cff%s%s|r"):format(BNET_HEX, broadcast), 1, 1, 1, true) end
+    return true
+end
+
+-- the friend's tooltip on the game tooltip, which EllesmereUI skins like
+-- every other tooltip (its background, black border and font size)
+function ft.Show(row, rec)
+    local tip = GameTooltip
+    if not tip or tip:IsForbidden() then return false end
+    tip:SetOwner(row, "ANCHOR_NONE")
+    tip:ClearAllPoints()
+    tip:SetPoint("TOPLEFT", row, "TOPRIGHT", 6, 0)
+    local ok, filled = pcall(ft.Fill, tip, rec)
+    if not (ok and filled) then
+        tip:Hide()
+        return false
+    end
+    tip:Show()
+    ft.owner = row
+    ft.shown = (ft.shown or 0) + 1
+    return true
+end
 
 function ft.Hook()
     if ft.hooked then return true end
     local eui = EllesmereUI
-    local original = type(eui) == "table" and eui.ShowWidgetTooltip
-    if type(original) ~= "function" then return false end
+    local show, hide = type(eui) == "table" and eui.ShowWidgetTooltip, type(eui) == "table" and eui.HideWidgetTooltip
+    if type(show) ~= "function" or type(hide) ~= "function" then return false end
     eui.ShowWidgetTooltip = function(label, text, opts, ...)
         if ft.db and type(label) == "table" then
             local rec = rawget(label, "rec")
-            if type(rec) == "table" and type(rec.info) == "table" then
-                local ok, rich = pcall(ft.Build, rec)
-                if ok and rich then
-                    ft.shown = (ft.shown or 0) + 1
-                    return original(label, rich, TIP_OPTS, ...)
-                end
+            if type(rec) == "table" and type(rec.info) == "table" and ft.Show(label, rec) then
+                hide(true)   -- EllesmereUI's small one stays away
+                return
             end
         end
-        return original(label, text, opts, ...)
+        return show(label, text, opts, ...)
+    end
+    eui.HideWidgetTooltip = function(...)
+        local owner = ft.owner
+        if owner then
+            ft.owner = nil
+            if GameTooltip and GameTooltip:IsOwned(owner) then GameTooltip:Hide() end
+        end
+        return hide(...)
     end
     ft.hooked = true
     return true
