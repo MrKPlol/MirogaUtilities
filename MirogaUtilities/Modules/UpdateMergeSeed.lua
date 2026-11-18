@@ -52,6 +52,10 @@ local SEED = {
         "spells\031specProfiles\031102\031barSpells\031cooldowns\031assignedSpells",
         "spells\031specProfiles\031102\031barSpells\031custom_6_204310_438\031assignedSpells",
         "spells\031specProfiles\031102\031barSpells\031custom_6_204310_438\031customSpellIDs\031#1259416",
+        -- 18.11.: Prowl cooldown, only shown while on cooldown
+        "spells\031specProfiles\031102\031barSpells\031cooldowns\031customSpellIDs\031#5215",
+        "spells\031specProfiles\031102\031spellSettingsCD\031#5215",
+        "profile\031addons\031EllesmereUICooldownManager\031customActiveStates\031#5215",
     },
     forever = {
         "profile\031discovery\031bagMapPins",
@@ -77,7 +81,7 @@ local SEED = {
     },
 }
 
-local SEED_VERSION = 2
+local SEED_VERSION = 3
 
 function um.Seed(db)
     if db.seeded == SEED_VERSION then return end

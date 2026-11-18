@@ -20,6 +20,7 @@ root.MODULES = {
     { key = "Powershift", label = "Powershift", desc = "Form to form in one key press, travel form included." },
     { key = "FlagPlates", label = "Flagged players", desc = "Turquoise nameplates, alerts and statistics for players on your list." },
     { key = "AutoMark", label = "Auto mark", desc = "Raid marks on your own group." },
+    { key = "FriendTips", label = "Friend tooltips", desc = "Class, level, faction and zone with icons when you hover a friend." },
     { key = "VendorCoin", label = "Vendor coin & stockpile", desc = "Red coin when the vendor pays more than the AH; hold raid materials, cheap hints, snipes." },
     { key = "NaowhTweaks", label = "Naowh tweaks", desc = "Scrolls and buff drinks only in dungeons and raids." },
     { key = "UpdateMerge", label = "Update merge", desc = "After a NaowhUI update: OLD or NEW for every changed setting." },

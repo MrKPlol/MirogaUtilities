@@ -34,7 +34,7 @@ Settings = nil
 local root = { ACCENT = { 0, 1, 1 }, ACCENT_HEX = "40e0d0", Say = function() end }
 root.Stopped = function(m) return m == "Weather" end
 root.CombatText, root.FlagPlates = { }, { }
-for _, m in ipairs({ "Powershift", "AutoMark", "VendorCoin", "Stockpile", "NaowhTweaks", "UpdateMerge", "LayerHost", "AddonFixes", "Weather", "Graphics", "BGQuiet", "LoginQuiet" }) do
+for _, m in ipairs({ "Powershift", "AutoMark", "FriendTips", "VendorCoin", "Stockpile", "NaowhTweaks", "UpdateMerge", "LayerHost", "AddonFixes", "Weather", "Graphics", "BGQuiet", "LoginQuiet" }) do
     root[m] = setmetatable({}, { __index = function() return stub() end })
 end
 root.MODULES = {}
@@ -46,7 +46,7 @@ local okRun, err = pcall(root.OpenHub, "weather")
 ok(okRun, "window builds: " .. tostring(err))
 local function has(t) for _, v in ipairs(texts) do if v == t then return true end end return false end
 for _, label in ipairs({ "Combat text", "Flagged players", "Vendor & stockpile", "Naowh", "World",
-    "Display", "Events & colors", "List", "Plates & alerts", "Graphics", "Weather", "LayerSwap", "Login", "Battlegrounds", "Addon fixes", "Quiet & fixes" }) do
+    "Display", "Events & colors", "List", "Plates & alerts", "Graphics", "Weather", "LayerSwap", "Login", "Battlegrounds", "Addon fixes", "Quiet & fixes", "Group & friends", "Friend tooltips" }) do
     ok(has(label), "label " .. label)
 end
 ok(has("Stockpile"), "stockpile sub tab")

@@ -999,6 +999,34 @@ local function BuildBGQuietPage(page)
 end
 
 -- ---------------------------------------------------------------------------
+-- friend tooltips
+
+local function BuildFriendTipsPage(page)
+    local ft = root.FriendTips
+    local function db() return ft.db or ft.DEFAULTS end
+    local function T(key, label, desc)
+        ToggleRow(page, label, desc, function() return db()[key] ~= false end, function(v) ft.Set(key, v) end)
+    end
+    Section(page, "Show")
+    T("icons", "Icons", "Class, faction, zone and group icons in front of the lines.")
+    T("levelColor", "Level in difficulty color", "Grey, green, yellow, orange or red, as for quests.")
+    T("race", "Race", "The race next to level and class.")
+    T("realm", "Realm", "Realm and ruleset after the character name.")
+    T("note", "Note", "Your note on the friend.")
+    T("broadcast", "Broadcast", "The friend's Battle.net broadcast.")
+    Section(page, "Status")
+    local row = Row(page, "EllesmereUI friends list", "Hover a friend in the friends window (O).")
+    local state = Text(row, 12, ACCENT, MONO ~= nil)
+    state:SetPoint("RIGHT", -14, 0)
+    state:SetJustifyH("RIGHT")
+    page.refreshers[#page.refreshers + 1] = function()
+        state:SetText(ft.hooked and ("hooked, shown " .. (ft.shown or 0) .. "x") or "|cffff5050not found|r")
+    end
+    Note(page, "Changes show at the next hover. Uses EllesmereUI's own tooltip, so it follows its background and font settings.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
 -- addon fixes
 
 local function BuildFixesPage(page)
@@ -1583,8 +1611,10 @@ local TABS = {
         { key = "players", label = "List", sub = "Everyone on this list gets marked nameplates, alerts and statistics.", build = BuildPlayersPage },
         { key = "alerts", label = "Plates & alerts", sub = "Plate color, sound, chat message and statistics.", build = BuildAlertsPage },
     } },
-    { key = "marks", label = "Auto mark", sub = "Raid marks on your own group, nobody else in it.",
-        icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1", module = "AutoMark", build = BuildMarksPage },
+    { key = "group", label = "Group & friends", icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1", subs = {
+        { key = "marks", label = "Auto mark", module = "AutoMark", sub = "Raid marks on your own group, nobody else in it.", build = BuildMarksPage },
+        { key = "friends", label = "Friend tooltips", module = "FriendTips", sub = "Class, level, faction, zone and more when you hover a friend.", build = BuildFriendTipsPage },
+    } },
     { group = "GOLD & UI" },
     { key = "gold", label = "Vendor & stockpile", icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", subs = {
         { key = "vendor", label = "Vendor coin", sub = "Red coin on items the vendor pays more for than the AH.", build = BuildVendorPage },
