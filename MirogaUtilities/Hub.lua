@@ -1058,15 +1058,19 @@ local function BuildTargetDebuffsPage(page)
     ToggleRow(page, "Show missing dimmed", "Grey icon while the debuff is not on the target: time to apply it.",
         function() return get("showMissing") ~= false end, function(v) td.Set("showMissing", v) end)
     Section(page, "Position")
+    ToggleRow(page, "Match the bar", "Size, shape and spacing taken from the EllesmereUI buff bar's own icons.",
+        function() return get("matchBar") ~= false end, function(v) td.Set("matchBar", v) end)
     ToggleRow(page, "Right of the bar", "Off: left of the EllesmereUI buff bar (Moonfire). On: right of it.",
         function() return get("side") == "RIGHT" end, function(v) td.Set("side", v and "RIGHT" or "LEFT") end)
-    SliderRow(page, "Icon size", "Same as the buff bar: 44.", 20, 64, 1,
+    SliderRow(page, "Icon size", "Used when Match the bar is off.", 20, 64, 1,
         function() return get("size") end, function(v) td.Set("size", v) end)
-    SliderRow(page, "Gap", "Distance to the bar.", 0, 60, 1,
+    SliderRow(page, "Gap", "Distance to the bar when Match the bar is off.", 0, 60, 1,
         function() return math.abs(get("x")) end, function(v) td.Set("x", v) end)
     SliderRow(page, "Up / down", "Vertical offset.", -100, 100, 1,
         function() return get("y") end, function(v) td.Set("y", v) end)
-    Note(page, "EllesmereUI's own bars only show your own debuffs. This row shows them from anyone, so you see a warrior's shout or another druid's Faerie Fire. In battlegrounds and boss fights the game may hide others' auras; the icon stays dim then.")
+    page:HookScript("OnShow", function() td.SetPreview(true) end)
+    page:HookScript("OnHide", function() td.SetPreview(false) end)
+    Note(page, "While this page is open the row shows as a preview: Demoralizing lit with a timer, Faerie Fire dimmed (missing). EllesmereUI's own bars only show your own debuffs. This row shows them from anyone, so you see a warrior's shout or another druid's Faerie Fire. In battlegrounds and boss fights the game may hide others' auras; the icon stays dim then.")
     page:Finish()
 end
 
