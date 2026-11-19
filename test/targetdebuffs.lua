@@ -10,6 +10,9 @@ local exists, attack, dead = true, true, false
 function UnitExists() return exists end
 function UnitCanAttack() return attack end
 function UnitIsDeadOrGhost() return dead end
+local inst, isPlayer = "none", false
+function IsInInstance() return inst ~= "none", inst end
+function UnitIsPlayer() return isPlayer end
 local function Widget()
     local w = { shown = true, alpha = 1 }
     local mt = { __index = function(t, k) return function() end end }
@@ -42,6 +45,9 @@ ok(td.Find(ff) == nil, "secret aura: dim")
 ok(td.TargetWanted(), "attackable target wanted")
 attack = false; ok(not td.TargetWanted(), "friendly target not wanted"); attack = true
 dead = SECRET; ok(not td.TargetWanted(), "secret state not wanted"); dead = false
+inst = "pvp"; ok(not td.TargetWanted(), "battleground: no row"); inst = "party"
+ok(td.TargetWanted(), "dungeon: row")
+isPlayer = true; ok(not td.TargetWanted(), "player target: no row"); isPlayer = false
 td.Update()
 ok(_G.MirogaTargetDebuffs == nil or true, "update runs")
 exists = false; td.Update()

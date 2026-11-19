@@ -1070,7 +1070,7 @@ local function BuildTargetDebuffsPage(page)
         function() return get("y") end, function(v) td.Set("y", v) end)
     page:HookScript("OnShow", function() td.SetPreview(true) end)
     page:HookScript("OnHide", function() td.SetPreview(false) end)
-    Note(page, "While this page is open the row shows as a preview: Demoralizing lit with a timer, Faerie Fire dimmed (missing). EllesmereUI's own bars only show your own debuffs. This row shows them from anyone, so you see a warrior's shout or another druid's Faerie Fire. In battlegrounds and boss fights the game may hide others' auras; the icon stays dim then.")
+    Note(page, "While this page is open the row shows as a preview: Demoralizing lit with a timer, Faerie Fire dimmed (missing). EllesmereUI's own bars only show your own debuffs. This row shows them from anyone, so you see a warrior's shout or another druid's Faerie Fire. PvE only: hidden in battlegrounds, arenas and on player targets.")
     page:Finish()
 end
 

@@ -8,7 +8,8 @@
 --   Faerie Fire:  Faerie Fire or Faerie Fire (Feral)
 -- Lit with the remaining time while on the target, dimmed while missing
 -- (that is the "apply it" hint). Only for an attackable, living target.
--- Auras the game keeps secret (battlegrounds, encounters) leave the slot dim.
+-- PvE only: hidden in battlegrounds, arenas and on player targets. Auras the
+-- game keeps secret (boss encounters, if Forever locks them) leave the slot dim.
 local _, root = ...
 local td = {}
 root.TargetDebuffs = td
@@ -54,8 +55,13 @@ function td.Find(slot)
     end
 end
 
+-- PvE only: no row in battlegrounds and arenas, none on players
 function td.TargetWanted()
     if not UnitExists("target") then return false end
+    local _, kind = IsInInstance()
+    if kind == "pvp" or kind == "arena" then return false end
+    local player = UnitIsPlayer("target")
+    if issecret(player) or player then return false end
     local can = UnitCanAttack("player", "target")
     local dead = UnitIsDeadOrGhost("target")
     if issecret(can) or issecret(dead) then return false end
@@ -234,6 +240,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterUnitEvent("UNIT_AURA", "target")
         self:RegisterUnitEvent("UNIT_FLAGS", "target")
         self:RegisterUnitEvent("UNIT_HEALTH", "target")
+        self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     elseif event == "PLAYER_ENTERING_WORLD" then
         Build()
         -- EllesmereUI builds its bars after login; anchor once they exist
