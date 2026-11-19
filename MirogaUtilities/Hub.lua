@@ -1055,6 +1055,9 @@ local function BuildTargetDebuffsPage(page)
         ToggleRow(page, slot.label, "Any rank, only when another player cast it.",
             function() return get(key) ~= false end, function(v) td.Set(key, v) end)
     end
+    Section(page, "Your own")
+    ToggleRow(page, "Show mine in the EllesmereUI bar", "Puts Faerie Fire and Demoralizing Roar into the Cooldown Manager's tracked buffs at login and after every layout import.",
+        function() return get("cdmTrack") ~= false end, function(v) td.Set("cdmTrack", v) end)
     Section(page, "Position")
     ToggleRow(page, "Match the bar", "Size, shape and spacing as the EllesmereUI buff bar draws its icons.",
         function() return get("matchBar") ~= false end, function(v) td.Set("matchBar", v) end)
@@ -1068,7 +1071,7 @@ local function BuildTargetDebuffsPage(page)
         function() return get("y") end, function(v) td.Set("y", v) end)
     page:HookScript("OnShow", function() td.SetPreview(true) end)
     page:HookScript("OnHide", function() td.SetPreview(false) end)
-    Note(page, "An icon shows only while another player's debuff is on your target: a warrior's shout, another druid's Faerie Fire. Your own show in the EllesmereUI bar. While this page is open both icons show as a preview. PvE only: hidden in battlegrounds, arenas and on player targets.")
+    Note(page, "An icon shows only while another player's debuff is on your target: a warrior's shout, another druid's Faerie Fire. Your own show in the EllesmereUI bar (switch above). While this page is open both icons show as a preview. PvE only: hidden in battlegrounds, arenas and on player targets.")
     page:Finish()
 end
 

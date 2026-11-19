@@ -20,7 +20,7 @@ td.SLOTS = {
     { key = "ff", label = "Faerie Fire",
         spells = { { id = 770, name = "Faerie Fire" }, { id = 16857, name = "Faerie Fire (Feral)" } } },
 }
-td.DEFAULTS = { demo = true, ff = true, matchBar = true, size = 36, x = 2, y = 0, side = "LEFT" }
+td.DEFAULTS = { demo = true, ff = true, cdmTrack = true, matchBar = true, size = 36, x = 2, y = 0, side = "LEFT" }
 td.ANCHOR = "ECME_CDMBar_buffs" -- EllesmereUI CDM bar 3 ("buffs"), Moonfire's bar
 
 local issecret = issecretvalue or function() return false end
@@ -257,8 +257,55 @@ function td.Update()
     row:SetShown(any)
 end
 
+-- ---------------------------------------------------------------------------
+-- own debuffs in the EllesmereUI bar: that bar shows what Blizzard's cooldown
+-- manager tracks as buffs. Naowh's druid layout hides Demoralizing Roar and
+-- leaves Faerie Fire out, and the layout lives on Blizzard's server, so it is
+-- set here through the game's own settings code (same as dragging it in the
+-- Cooldown Manager window) whenever the layout loads or changes.
+td.CDM_SPELLS = { [99] = true, [1160] = true, [770] = true, [16857] = true }
+
+function td.FixCDM()
+    if td.cdmBusy or not Opt("cdmTrack") then return 0 end
+    if InCombatLockdown and InCombatLockdown() then td.cdmPending = true; return 0 end
+    local s = CooldownViewerSettings
+    local dp = s and s.GetDataProvider and s:GetDataProvider()
+    local lm = s and s.GetLayoutManager and s:GetLayoutManager()
+    local cat = Enum and Enum.CooldownViewerCategory and Enum.CooldownViewerCategory.TrackedBuff
+    if not (dp and lm and cat and dp.GetOrderedCooldownIDs and dp.SetCooldownToCategory) then return 0 end
+    if s.IsShown and s:IsShown() then return 0 end -- the player is editing it
+    td.cdmBusy = true
+    local okRun, moved = pcall(function()
+        local n = 0
+        for _, id in ipairs(dp:GetOrderedCooldownIDs() or {}) do
+            local info = dp:GetCooldownInfoForID(id)
+            local hit = false
+            for _, sp in ipairs(info and { info.spellID, info.overrideSpellID } or {}) do
+                if not issecret(sp) and td.CDM_SPELLS[sp] then hit = true end
+            end
+            if hit and info.category ~= cat then
+                local st = dp:SetCooldownToCategory(id, cat)
+                if st == nil or st == Enum.CooldownLayoutStatus.Success then n = n + 1 end
+            end
+        end
+        if n > 0 then s:SaveCurrentLayout() end
+        return n
+    end)
+    td.cdmBusy = false
+    td.cdmPending = false
+    return okRun and moved or 0
+end
+
+local function QueueFixCDM()
+    if td.cdmQueued then return end
+    td.cdmQueued = true
+    C_Timer.After(1, function() td.cdmQueued = false; td.FixCDM() end)
+end
+td.QueueFixCDM = QueueFixCDM
+
 function td.Set(key, value)
     if td.db then td.db[key] = value end
+    if key == "cdmTrack" and value then QueueFixCDM() end
     td.Layout(); td.Update()
 end
 
@@ -281,6 +328,11 @@ events:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterUnitEvent("UNIT_FLAGS", "target")
         self:RegisterUnitEvent("UNIT_HEALTH", "target")
         self:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+        self:RegisterEvent("PLAYER_REGEN_ENABLED")
+        if EventRegistry and EventRegistry.RegisterCallback then
+            EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", QueueFixCDM, td)
+            EventRegistry:RegisterCallback("CooldownViewerSettings.OnHide", QueueFixCDM, td)
+        end
     elseif event == "PLAYER_ENTERING_WORLD" then
         Build()
         -- EllesmereUI builds its bars after login; anchor once they exist
@@ -292,6 +344,9 @@ events:SetScript("OnEvent", function(self, event, arg1)
             bar:HookScript("OnSizeChanged", function() td.Layout() end)
         end
         td.Update()
+        C_Timer.After(3, QueueFixCDM)
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        if td.cdmPending then QueueFixCDM() end
     else
         td.Update()
     end

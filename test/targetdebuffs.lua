@@ -63,4 +63,27 @@ list = {}
 td.Update(); ok(not _G.MirogaTargetDebuffs.shown, "nothing foreign: row hidden")
 list = { { name = "Demoralizing Shout", sourceUnit = "party1", isFromPlayerOrPlayerPet = false } }
 td.Update(); ok(_G.MirogaTargetDebuffs.shown, "foreign shout: row shown")
+
+-- own FF / Roar into the cooldown manager's tracked buffs
+Enum = { CooldownViewerCategory = { TrackedBuff = 2 }, CooldownLayoutStatus = { Success = 0 } }
+function InCombatLockdown() return false end
+local infos = { [199376] = { spellID = 99, category = -2 }, [199443] = { spellID = 770, category = 1 },
+    [199455] = { spellID = 8921, category = 2 } }
+local saved = 0
+CooldownViewerSettings = { IsShown = function() return false end,
+    SaveCurrentLayout = function() saved = saved + 1 end,
+    GetLayoutManager = function() return {} end,
+    GetDataProvider = function() return {
+        GetOrderedCooldownIDs = function() return { 199376, 199443, 199455 } end,
+        GetCooldownInfoForID = function(_, id) return infos[id] end,
+        SetCooldownToCategory = function(_, id, c) infos[id].category = c; return 0 end } end }
+ok(td.FixCDM() == 2 and saved == 1, "roar + ff moved to tracked buffs, saved once")
+ok(infos[199376].category == 2 and infos[199443].category == 2 and infos[199455].category == 2, "categories set")
+ok(td.FixCDM() == 0 and saved == 1, "second run: nothing to do")
+infos[199443].category = 1
+function InCombatLockdown() return true end
+ok(td.FixCDM() == 0 and td.cdmPending, "in combat: deferred")
+function InCombatLockdown() return false end
+td.db.cdmTrack = false; ok(td.FixCDM() == 0, "switched off: untouched"); td.db.cdmTrack = true
+ok(td.FixCDM() == 1, "after combat: fixed")
 print(n .. " checks, " .. bad .. " failures"); os.exit(bad == 0 and 0 or 1)
