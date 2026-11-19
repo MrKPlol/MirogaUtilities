@@ -18,6 +18,7 @@ root.Say = Say
 root.MODULES = {
     { key = "CombatText", label = "Combat text", desc = "Damage, heals, buffs and debuffs on you, in movable boxes." },
     { key = "Powershift", label = "Powershift", desc = "Form to form in one key press, travel form included." },
+    { key = "TargetDebuffs", label = "Target debuffs", desc = "Demoralizing Shout/Roar and Faerie Fire on your target, from anyone, next to the cooldown bar." },
     { key = "FlagPlates", label = "Flagged players", desc = "Turquoise nameplates, alerts and statistics for players on your list." },
     { key = "AutoMark", label = "Auto mark", desc = "Raid marks on your own group." },
     { key = "FriendTips", label = "Friend tooltips", desc = "Class, level, faction and zone with icons when you hover a friend." },
@@ -28,7 +29,7 @@ root.MODULES = {
     { key = "Weather", label = "Weather", desc = "One key: storms low, again: your weather back." },
     { key = "Graphics", label = "Graphics", desc = "Hidden graphics values (grass, sharpening, gamma) written after every login." },
     { key = "BGQuiet", label = "BG quiet", desc = "In battlegrounds: BugSack muted, join lines, crafting lines, channel notices and \"+\" spam hidden." },
-    { key = "AddonFixes", label = "Addon fixes", desc = "ProcDoc, WIM, Naowh Discovery and HappyCamper errors in battlegrounds stopped at the source." },
+    { key = "AddonFixes", label = "Addon fixes", desc = "ProcDoc, WIM, Naowh Discovery and HappyCamper errors stopped at the source; EllesmereUI plates with two tanks." },
     { key = "LoginQuiet", label = "Login quiet", desc = "No addon spam in the chat after login or reload." },
 }
 

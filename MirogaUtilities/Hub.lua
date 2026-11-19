@@ -1027,6 +1027,33 @@ local function BuildFriendTipsPage(page)
 end
 
 -- ---------------------------------------------------------------------------
+-- target debuffs
+
+local function BuildTargetDebuffsPage(page)
+    local td = root.TargetDebuffs
+    local function get(key) local v = (td.db or td.DEFAULTS)[key]; if v == nil then v = td.DEFAULTS[key] end; return v end
+    Section(page, "Track")
+    for _, slot in ipairs(td.SLOTS) do
+        local key = slot.key
+        ToggleRow(page, slot.label, "Any rank, from anyone in or out of your group.",
+            function() return get(key) ~= false end, function(v) td.Set(key, v) end)
+    end
+    ToggleRow(page, "Show missing dimmed", "Grey icon while the debuff is not on the target: time to apply it.",
+        function() return get("showMissing") ~= false end, function(v) td.Set("showMissing", v) end)
+    Section(page, "Position")
+    ToggleRow(page, "Right of the bar", "Off: left of the EllesmereUI buff bar (Moonfire). On: right of it.",
+        function() return get("side") == "RIGHT" end, function(v) td.Set("side", v and "RIGHT" or "LEFT") end)
+    SliderRow(page, "Icon size", "Same as the buff bar: 44.", 20, 64, 1,
+        function() return get("size") end, function(v) td.Set("size", v) end)
+    SliderRow(page, "Gap", "Distance to the bar.", 0, 60, 1,
+        function() return math.abs(get("x")) end, function(v) td.Set("x", v) end)
+    SliderRow(page, "Up / down", "Vertical offset.", -100, 100, 1,
+        function() return get("y") end, function(v) td.Set("y", v) end)
+    Note(page, "EllesmereUI's own bars only show your own debuffs. This row shows them from anyone, so you see a warrior's shout or another druid's Faerie Fire. In battlegrounds and boss fights the game may hide others' auras; the icon stays dim then.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
 -- addon fixes
 
 local function BuildFixesPage(page)
@@ -1606,6 +1633,8 @@ local TABS = {
         { key = "text", label = "Display", sub = "Damage, heals, buffs and debuffs on you: boxes, font, timing.", build = BuildTextPage },
         { key = "events", label = "Events & colors", sub = "What shows up, and in which color.", build = BuildEventsPage },
     } },
+    { key = "debuffs", label = "Target debuffs", sub = "Demoralizing Shout/Roar and Faerie Fire on your target, from anyone.",
+        icon = "Interface\\Icons\\Spell_Nature_FaerieFire", module = "TargetDebuffs", build = BuildTargetDebuffsPage },
     { key = "shift", label = "Powershift", sub = "Form to form in one key press, without the action bar bug.",
         icon = "Interface\\Icons\\Ability_Druid_CatForm", module = "Powershift", build = BuildShiftPage },
     { group = "PLAYERS & GROUP" },

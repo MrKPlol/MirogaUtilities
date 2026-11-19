@@ -22,6 +22,14 @@
 --                     "pop up on receive" is on, though no window opens. Fix: the
 --                     filter lets online/offline alerts through to normal chat
 --                     frames; WIM's own windows still get them.
+--   EllesmereUI Nameplates 9.9  two tanks: plates turn the off-tank color although
+--                     the mob is on me. Its off-tank fold paints offTankAggro
+--                     whenever a co-tank's isTanking folds true and never asks
+--                     whether I am tanking; the threat status it starts from is
+--                     pinned at 3 on plate tokens. Fix: with another tank in the
+--                     group the fold decides all three cases C-side: mine =
+--                     tankHasAggro, co-tank's = offTankAggro, else tankNoAggro.
+--                     Without a co-tank EllesmereUI's colors stay as they are.
 --   HappyCamper 1.1   JoinTemporaryChannel blocked: its channel check rejoins the
 --                     camp channel from a timer, which a BG forbids. Fix: no
 --                     channel check while in a BG or arena.
@@ -39,12 +47,14 @@ af.FIXES = {
         desc = "WIM no longer replays system lines through the chat filters in battlegrounds." },
     { key = "wimonline", addon = "WIM", label = "WIM: friend online lines",
         desc = "Battle.net friends coming online or going offline show in the main chat again." },
+    { key = "euitanks", addon = "EllesmereUINameplates", label = "EllesmereUI: two tank plates",
+        desc = "With a second tank: green = on you, purple = on the other tank, red = on nobody tanking." },
     { key = "naowh", addon = "NaowhForever_Discovery", label = "Naowh Discovery: holiday calendar",
         desc = "Holiday check waits while the calendar is locked; the last known holidays stay." },
     { key = "happycamper", addon = "HappyCamper", label = "HappyCamper: channel rejoin",
         desc = "No camp channel check in battlegrounds and arenas, where joining is blocked." },
 }
-af.DEFAULTS = { procdoc = true, wim = true, wimonline = true, naowh = true, happycamper = true }
+af.DEFAULTS = { procdoc = true, wim = true, wimonline = true, euitanks = true, naowh = true, happycamper = true }
 af.hits = {}        -- [key] = times stepped in this session
 af.installed = {}   -- [key] = true once wrapped
 
@@ -210,6 +220,37 @@ local function FixNaowh()
 end
 
 -- ---------------------------------------------------------------------------
+-- EllesmereUI Nameplates: two tanks
+
+local function FixEUITanks()
+    local ns = _G.EllesmereNameplates_NS
+    local original = type(ns) == "table" and ns.ComputeOffTankFold
+    local eval = C_CurveUtil and C_CurveUtil.EvaluateColorValueFromBoolean
+    if type(original) ~= "function" or not eval then return false end
+    local function Color(key)
+        local db, d = ns.db, ns.defaults
+        local c = (type(db) == "table" and db[key]) or (type(d) == "table" and d[key])
+        if type(c) == "table" and c.r and c.g and c.b then return c end
+    end
+    ns.ComputeOffTankFold = function(unit, br, bg, bb, otr, otg, otb, ...)
+        if not On("euitanks") then return original(unit, br, bg, bb, otr, otg, otb, ...) end
+        local mine = UnitDetailedThreatSituation("player", unit)
+        local has, no = Color("tankHasAggro"), Color("tankNoAggro")
+        -- type() reports a secret boolean as boolean; nil = refused read
+        if type(mine) ~= "boolean" or not (has and no) then
+            return original(unit, br, bg, bb, otr, otg, otb, ...)
+        end
+        -- red unless the co-tank holds it (purple) ...
+        local ok, r, g, b, a = original(unit, no.r, no.g, no.b, otr, otg, otb, ...)
+        if not ok then return false end -- no other tank: EllesmereUI as usual
+        Hit("euitanks")
+        -- ... and green whenever it is on me
+        return true, eval(mine, has.r, r), eval(mine, has.g, g), eval(mine, has.b, b), eval(mine, 0, a)
+    end
+    return true
+end
+
+-- ---------------------------------------------------------------------------
 -- HappyCamper
 
 local function FixHappyCamper()
@@ -229,7 +270,7 @@ local function FixHappyCamper()
     return true
 end
 
-local INSTALL = { procdoc = FixProcDoc, wim = FixWIM, wimonline = FixWIMOnline, naowh = FixNaowh, happycamper = FixHappyCamper }
+local INSTALL = { procdoc = FixProcDoc, wim = FixWIM, wimonline = FixWIMOnline, euitanks = FixEUITanks, naowh = FixNaowh, happycamper = FixHappyCamper }
 
 -- wraps every fix whose addon is loaded and not wrapped yet; a fix that is
 -- switched off stays wrapped but passes everything through

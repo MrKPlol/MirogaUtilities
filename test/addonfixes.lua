@@ -104,4 +104,32 @@ local comm = HappyCamper_NS.Comm
 comm:CheckChannelOff(); ok(checks == 1, "outside: check runs")
 instance = "arena"; comm:CheckChannelOff(); ok(checks == 1 and af.hits.happycamper == 1, "arena: no check")
 
+-- EllesmereUI two tanks
+local GREEN, RED, PURPLE = { r = 0, g = 1, b = 0 }, { r = 1, g = 0, b = 0 }, { r = 0.7, g = 0.2, b = 1 }
+local tanking = {} -- [token] = isTanking
+function UnitDetailedThreatSituation(u) return tanking[u] end
+C_CurveUtil = { EvaluateColorValueFromBoolean = function(c, t, f) if c then return t end return f end }
+local coTank = true
+_G.EllesmereNameplates_NS = { db = { tankHasAggro = GREEN, tankNoAggro = RED }, defaults = {},
+    ComputeOffTankFold = function(unit, r, g, b, otr, otg, otb)
+        if not coTank then return false end
+        if tanking.party1 then return true, otr, otg, otb, 1 end
+        return true, r, g, b, 0
+    end }
+loaded.EllesmereUINameplates = true
+handler(nil, "ADDON_LOADED", "EllesmereUINameplates")
+ok(af.installed.euitanks, "EUI fold wrapped")
+local NS = _G.EllesmereNameplates_NS
+local function fold() return NS.ComputeOffTankFold("nameplate1", 0.5, 0.5, 0.5, PURPLE.r, PURPLE.g, PURPLE.b) end
+tanking = { player = true, party1 = true }
+local o, r, g, b = fold(); ok(o and r == 0 and g == 1, "on me: green, even when the co-tank reads tanking")
+tanking = { player = false, party1 = true }
+o, r, g, b = fold(); ok(o and r == 0.7 and b == 1, "on co-tank: purple")
+tanking = { player = false, party1 = false, party2 = true }
+o, r, g, b = fold(); ok(o and r == 1 and g == 0, "on a dps: red")
+coTank = false
+ok(fold() == false, "no co-tank: EUI as usual")
+coTank = true; tanking = {}
+o, r = fold(); ok(o and r == 0.5, "refused read: EUI's own fold")
+
 print(n .. " checks, " .. bad .. " failures"); os.exit(bad == 0 and 0 or 1)
