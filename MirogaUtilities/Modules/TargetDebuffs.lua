@@ -6,8 +6,8 @@
 -- Slots (one per effect, any rank, any caster):
 --   Demoralizing: Demoralizing Shout or Demoralizing Roar (they do not stack)
 --   Faerie Fire:  Faerie Fire or Faerie Fire (Feral)
--- Lit with the remaining time while on the target, dimmed while missing
--- (that is the "apply it" hint). Only for an attackable, living target.
+-- An icon shows only while ANOTHER player's debuff is on the target (yours
+-- show in EllesmereUI's own bar); nothing else, no placeholders.
 -- PvE only: hidden in battlegrounds, arenas and on player targets. Auras the
 -- game keeps secret (boss encounters, if Forever locks them) leave the slot dim.
 local _, root = ...
@@ -20,7 +20,7 @@ td.SLOTS = {
     { key = "ff", label = "Faerie Fire",
         spells = { { id = 770, name = "Faerie Fire" }, { id = 16857, name = "Faerie Fire (Feral)" } } },
 }
-td.DEFAULTS = { demo = true, ff = true, showMissing = true, matchBar = true, size = 44, x = 2, y = 0, side = "LEFT" }
+td.DEFAULTS = { demo = true, ff = true, matchBar = true, size = 36, x = 2, y = 0, side = "LEFT" }
 td.ANCHOR = "ECME_CDMBar_buffs" -- EllesmereUI CDM bar 3 ("buffs"), Moonfire's bar
 
 local issecret = issecretvalue or function() return false end
@@ -41,21 +41,38 @@ local function SpellName(s)
     return s.localName
 end
 
--- the first aura of the slot on the target: aura table or nil (secret = nil)
+-- true when the aura is the player's own (or cannot be told: then not shown)
+local function Mine(aura)
+    local own = aura.isFromPlayerOrPlayerPet
+    if issecret(own) then return true end
+    if own then return true end
+    local src = aura.sourceUnit
+    if issecret(src) then return true end
+    return src == "player" or src == "pet"
+end
+td.Mine = Mine
+
+-- another player's aura of the slot on the target: { icon, expirationTime,
+-- duration } or nil. Yours never count (EllesmereUI's bar shows them).
 function td.Find(slot)
-    local get = C_UnitAuras and C_UnitAuras.GetAuraDataBySpellName
-    if not get then return nil end
-    for _, s in ipairs(slot.spells) do
-        local ok, aura = pcall(get, "target", SpellName(s), "HARMFUL")
-        if ok and type(aura) == "table" and not issecret(aura) then
-            local exp, dur = aura.expirationTime, aura.duration
-            if issecret(exp) or issecret(dur) then exp, dur = nil, nil end
-            return { icon = (not issecret(aura.icon)) and aura.icon or nil, expirationTime = exp, duration = dur }
+    local byIndex = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
+    if not byIndex then return nil end
+    local names = {}
+    for _, s in ipairs(slot.spells) do names[SpellName(s)] = true end
+    for i = 1, 40 do
+        local ok, aura = pcall(byIndex, "target", i, "HARMFUL")
+        if not ok or aura == nil then break end
+        if type(aura) == "table" and not issecret(aura) then
+            local name = aura.name
+            if not issecret(name) and names[name] and not Mine(aura) then
+                local exp, dur = aura.expirationTime, aura.duration
+                if issecret(exp) or issecret(dur) then exp, dur = nil, nil end
+                return { icon = (not issecret(aura.icon)) and aura.icon or nil, expirationTime = exp, duration = dur }
+            end
         end
     end
 end
 
--- PvE only: no row in battlegrounds and arenas, none on players
 function td.TargetWanted()
     if not UnitExists("target") then return false end
     local _, kind = IsInInstance()
@@ -104,26 +121,37 @@ local function Build()
     end
 end
 
--- size and spacing of the bar's own icons (EllesmereUI "cropped" icons are
--- wider than tall): nil when the bar shows no icon right now
+-- the buffs bar's settings in EllesmereUI's saved profile
+local function BarData()
+    local db = EllesmereUIDB
+    local prof = type(db) == "table" and db.profiles and db.profiles[db.activeProfile or "Default"]
+    local cdm = prof and prof.addons and prof.addons.EllesmereUICooldownManager
+    local bars = cdm and cdm.cdmBars and cdm.cdmBars.bars
+    if type(bars) ~= "table" then return nil end
+    for _, bd in ipairs(bars) do
+        if bd.key == "buffs" then return bd end
+    end
+end
+
+-- icon width, height and gap as the bar draws them: the bar's own height is
+-- one icon (EllesmereUI sizes in screen pixels, so its numbers are not ours),
+-- the width follows the bar's crop (cropped icons are wider than tall)
 function td.BarGeometry()
     local bar = _G[td.ANCHOR]
-    if not (bar and bar.GetChildren) then return nil end
-    local list = {}
-    for _, c in ipairs({ bar:GetChildren() }) do
-        if c:IsShown() and c ~= row then
-            local w, h, l = c:GetWidth(), c:GetHeight(), c:GetLeft()
-            if w and h and l and w > 10 and h > 10 and not issecret(w) and not issecret(l) then
-                list[#list + 1] = { w = w, h = h, l = l }
-            end
-        end
+    if not (bar and bar.GetHeight) then return nil end
+    local h = bar:GetHeight()
+    if issecret(h) or not h or h < 8 or h > 90 then return nil end
+    local es, rs = bar:GetEffectiveScale(), UIParent:GetEffectiveScale()
+    if es and rs and rs > 0 then h = h * es / rs end
+    local bd = BarData()
+    local cf = 1
+    if bd and bd.iconShape == "cropped" then
+        cf = 1 - 2 * ((bd.iconCropPercent or 8) / 100)
     end
-    if #list == 0 then return nil end
-    table.sort(list, function(a, b) return a.l < b.l end)
-    local first, gap = list[1], nil
-    if list[2] then gap = list[2].l - (first.l + first.w) end
-    if not gap or gap < 0 or gap > 20 then gap = 2 end
-    return first.w, first.h, gap
+    local size = (bd and bd.iconSize) or h
+    local unit = h / (size * cf)          -- our units per EllesmereUI unit
+    local gap = ((bd and bd.spacing) or 2) * unit
+    return h / cf, h, gap
 end
 
 function td.Layout()
@@ -138,15 +166,12 @@ function td.Layout()
     for _, f in ipairs(icons) do
         if Opt(f.slot.key) then shown[#shown + 1] = f else f:Hide() end
     end
-    row:SetSize(math.max(1, #shown * w + (#shown - 1) * gap), h)
-    -- crop the texture to the icon's shape, as EllesmereUI does
     local crop = (w > h) and (1 - h / w) / 2 or 0
-    for i, f in ipairs(shown) do
+    for _, f in ipairs(icons) do
         f:SetSize(w, h)
         f.tex:SetTexCoord(0.07, 0.93, 0.07 + crop * 0.86, 0.93 - crop * 0.86)
-        f:ClearAllPoints()
-        f:SetPoint("LEFT", row, "LEFT", (i - 1) * (w + gap), 0)
     end
+    row:SetSize(w, h)
     row:ClearAllPoints()
     local bar = _G[td.ANCHOR]
     local x, y = Opt("x"), Opt("y")
@@ -164,6 +189,23 @@ function td.Layout()
     end
 end
 
+-- the shown icons side by side, the first one next to the bar
+function td.Pack(shown)
+    local g = td.geometry or { w = 36, h = 36, gap = 2 }
+    local n = #shown
+    row:SetSize(math.max(1, n * g.w + math.max(0, n - 1) * g.gap), g.h)
+    local right = Opt("side") ~= "RIGHT"   -- left of the bar: grow leftwards
+    for i, f in ipairs(shown) do
+        f:ClearAllPoints()
+        if right then
+            f:SetPoint("RIGHT", row, "RIGHT", -(i - 1) * (g.w + g.gap), 0)
+        else
+            f:SetPoint("LEFT", row, "LEFT", (i - 1) * (g.w + g.gap), 0)
+        end
+        f:Show()
+    end
+end
+
 -- preview: both icons lit with a running timer, no target needed (the hub page)
 function td.SetPreview(on)
     td.preview = on and true or false
@@ -178,42 +220,40 @@ function td.Update()
         for i, f in ipairs(icons) do
             if Opt(f.slot.key) then
                 f.tex:SetTexture(SlotIcon(f.slot))
-                f.tex:SetDesaturated(i == 2 and Opt("showMissing"))
-                f:SetAlpha((i == 2 and Opt("showMissing")) and 0.4 or 1)
-                if i == 1 then f.cd:SetCooldown(now - 12, 30); f.cd:Show() else f.cd:Hide() end
+                f.tex:SetDesaturated(false)
+                f:SetAlpha(1)
+                f.cd:SetCooldown(now - 6 * i, 30); f.cd:Show()
                 f:Show()
             end
         end
+        local shown = {}
+        for _, f in ipairs(icons) do if Opt(f.slot.key) then shown[#shown + 1] = f end end
+        td.Pack(shown)
         row:Show()
         return
     end
     if not td.TargetWanted() then row:Hide(); return end
-    local any = false
+    -- only present debuffs, packed from the bar outwards
+    local shown = {}
     for _, f in ipairs(icons) do
-        if Opt(f.slot.key) then
-            local aura = td.Find(f.slot)
-            if aura then
-                f.tex:SetTexture(aura.icon or SlotIcon(f.slot))
-                f.tex:SetDesaturated(false)
-                f:SetAlpha(1)
-                if aura.duration and aura.duration > 0 and aura.expirationTime then
-                    f.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
-                    f.cd:Show()
-                else
-                    f.cd:Hide()
-                end
-                f:Show(); any = true
-            elseif Opt("showMissing") then
-                f.tex:SetTexture(SlotIcon(f.slot))
-                f.tex:SetDesaturated(true)
-                f:SetAlpha(0.4)
-                f.cd:Hide()
-                f:Show(); any = true
+        local aura = Opt(f.slot.key) and td.Find(f.slot)
+        if aura then
+            f.tex:SetTexture(aura.icon or SlotIcon(f.slot))
+            f.tex:SetDesaturated(false)
+            f:SetAlpha(1)
+            if aura.duration and aura.duration > 0 and aura.expirationTime then
+                f.cd:SetCooldown(aura.expirationTime - aura.duration, aura.duration)
+                f.cd:Show()
             else
-                f:Hide()
+                f.cd:Hide()
             end
+            shown[#shown + 1] = f
+        else
+            f:Hide()
         end
     end
+    td.Pack(shown)
+    local any = #shown > 0
     row:SetShown(any)
 end
 

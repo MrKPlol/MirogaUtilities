@@ -1052,13 +1052,11 @@ local function BuildTargetDebuffsPage(page)
     Section(page, "Track")
     for _, slot in ipairs(td.SLOTS) do
         local key = slot.key
-        ToggleRow(page, slot.label, "Any rank, from anyone in or out of your group.",
+        ToggleRow(page, slot.label, "Any rank, only when another player cast it.",
             function() return get(key) ~= false end, function(v) td.Set(key, v) end)
     end
-    ToggleRow(page, "Show missing dimmed", "Grey icon while the debuff is not on the target: time to apply it.",
-        function() return get("showMissing") ~= false end, function(v) td.Set("showMissing", v) end)
     Section(page, "Position")
-    ToggleRow(page, "Match the bar", "Size, shape and spacing taken from the EllesmereUI buff bar's own icons.",
+    ToggleRow(page, "Match the bar", "Size, shape and spacing as the EllesmereUI buff bar draws its icons.",
         function() return get("matchBar") ~= false end, function(v) td.Set("matchBar", v) end)
     ToggleRow(page, "Right of the bar", "Off: left of the EllesmereUI buff bar (Moonfire). On: right of it.",
         function() return get("side") == "RIGHT" end, function(v) td.Set("side", v and "RIGHT" or "LEFT") end)
@@ -1070,7 +1068,7 @@ local function BuildTargetDebuffsPage(page)
         function() return get("y") end, function(v) td.Set("y", v) end)
     page:HookScript("OnShow", function() td.SetPreview(true) end)
     page:HookScript("OnHide", function() td.SetPreview(false) end)
-    Note(page, "While this page is open the row shows as a preview: Demoralizing lit with a timer, Faerie Fire dimmed (missing). EllesmereUI's own bars only show your own debuffs. This row shows them from anyone, so you see a warrior's shout or another druid's Faerie Fire. PvE only: hidden in battlegrounds, arenas and on player targets.")
+    Note(page, "An icon shows only while another player's debuff is on your target: a warrior's shout, another druid's Faerie Fire. Your own show in the EllesmereUI bar. While this page is open both icons show as a preview. PvE only: hidden in battlegrounds, arenas and on player targets.")
     page:Finish()
 end
 
