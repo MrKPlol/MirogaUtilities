@@ -63,4 +63,32 @@ nt.Set("rxpHide", false)
 RXP.settings.ToggleActive(); for _, fn in ipairs(timers) do fn() end; timers = {}
 ok(NaowhRXPWindow.shown, "switch off: Naowh's own behaviour")
 
+-- druid buffs: with another druid, only while missing on me
+local WILD = { class = "DRUID", spells = { 1126, 5232 } }
+local FORT = { class = "PRIEST", spells = { 1243 } }
+
+local origCollect = function() return { { key = "food" }, { key = WILD }, { key = FORT } } end
+
+nt.db.scrollsInstanceOnly, nt.db.drinksInstanceOnly = false, false
+local group, onMe = { "DRUID" }, false
+function GetNumGroupMembers() return #group end
+function IsInRaid() return false end
+function UnitIsUnit(u) return u == "player" end
+function UnitClass(u) local i = tonumber(u:match("%d+")); local c = group[(i or 0) + 1]; return c, c end
+C_UnitAuras = { GetPlayerAuraBySpellID = function(id) if onMe and id == 5232 then return {} end end }
+local function rows()
+    local out = {}
+    for _, e in ipairs(nt.Filter(origCollect())) do out[#out + 1] = type(e.key) == "table" and e.key.class or e.key end
+    return table.concat(out, ",")
+end
+ok(rows() == "food,DRUID,PRIEST", "solo: Naowh's rule")
+group = { "DRUID", "WARRIOR" }; onMe = true
+ok(rows() == "food,DRUID,PRIEST", "only druid: Naowh's rule even with buff on me")
+group = { "DRUID", "WARRIOR", "DRUID" }; onMe = false
+ok(rows() == "food,DRUID,PRIEST", "other druid, missing on me: shows")
+onMe = true
+ok(rows() == "food,PRIEST", "other druid, on me: hidden, priest buff stays")
+nt.Set("druidSelfOnly", false)
+ok(rows() == "food,DRUID,PRIEST", "switch off: Naowh's rule")
+
 print(n .. " checks, " .. bad .. " failures"); os.exit(bad == 0 and 0 or 1)

@@ -1286,6 +1286,8 @@ local function BuildNaowhPage(page)
         function() return db().drinksInstanceOnly end, function(v) nt.Set("drinksInstanceOnly", v) end)
     ToggleRow(page, "Nothing in battlegrounds and arenas", "No food, flask, scroll, drink or buff reminders in PvP. Naowh itself has no PvP switch.",
         function() return db().noneInPvP end, function(v) nt.Set("noneInPvP", v) end)
+    ToggleRow(page, "Druid buffs only for me when another druid is here", "With a second druid in the group, Mark of the Wild shows only while it is missing on you. Alone or as the only druid, Naowh's normal rule.",
+        function() return db().druidSelfOnly end, function(v) nt.Set("druidSelfOnly", v) end)
     Section(page, "RestedXP")
     ToggleRow(page, "/rxp hide hides Naowh's guide window too", "With Naowh's RXP skin, /rxp hide left its list on screen. Now it goes and comes back with /rxp show.",
         function() return db().rxpHide end, function(v) nt.Set("rxpHide", v) end)

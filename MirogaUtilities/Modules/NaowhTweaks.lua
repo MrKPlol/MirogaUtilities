@@ -11,7 +11,43 @@ local _, root = ...
 local nt = {}
 root.NaowhTweaks = nt
 
-nt.DEFAULTS = { scrollsInstanceOnly = true, drinksInstanceOnly = true, rxpHide = true, noneInPvP = true }
+nt.DEFAULTS = { scrollsInstanceOnly = true, drinksInstanceOnly = true, rxpHide = true, noneInPvP = true,
+    druidSelfOnly = true }
+
+-- Druid buffs with another druid around: Naowh's group buff row (Mark of the
+-- Wild) shows as soon as anyone in the group lacks it. With a second druid in
+-- the group, druidSelfOnly keeps it only while it is missing on you. Naowh's
+-- raid buff entries carry their family table as .key (class, spells).
+local issecret = issecretvalue or function() return false end
+
+function nt.OtherDruid()
+    local n = GetNumGroupMembers() or 0
+    if n <= 1 then return false end
+    local raid = IsInRaid()
+    for i = 1, raid and n or n - 1 do
+        local unit = (raid and "raid" or "party") .. i
+        if not UnitIsUnit(unit, "player") then
+            local _, class = UnitClass(unit)
+            if class and not issecret(class) and class == "DRUID" then return true end
+        end
+    end
+    return false
+end
+
+function nt.PlayerHas(spells)
+    local get = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID
+    if not get then return false end
+    for _, id in ipairs(spells) do
+        local ok, aura = pcall(get, id)
+        if ok and aura ~= nil and not issecret(aura) then return true end
+    end
+    return false
+end
+
+local function DruidFamily(entry)
+    local family = type(entry) == "table" and entry.key
+    return type(family) == "table" and family.class == "DRUID" and type(family.spells) == "table" and family or nil
+end
 
 -- Naowh has no PvP switch: in battlegrounds and arenas its reminders fall back
 -- to the "World" settings. noneInPvP empties the whole row there (food,
@@ -46,22 +82,36 @@ local function Wrap()
     if not (buffs and type(buffs.Collect) == "function") then return false end
     local original = buffs.Collect
     buffs.Collect = function(...)
-        local list = original(...)
-        local db = nt.db
-        if type(list) == "table" and db and db.noneInPvP and InPvP() then
-            for i = #list, 1, -1 do list[i] = nil end
-            return list
-        end
-        if type(list) == "table" and db and not InDungeonOrRaid() then
-            for i = #list, 1, -1 do
-                local setting = type(list[i]) == "table" and INSTANCE_ONLY[list[i].key]
-                if setting and db[setting] then table.remove(list, i) end
-            end
-        end
-        return list
+        return nt.Filter(original(...))
     end
     wrapped = true
     return true
+end
+
+-- Naowh's reminder list after our rules
+function nt.Filter(list)
+    local db = nt.db
+    if type(list) == "table" and db and db.noneInPvP and InPvP() then
+        for i = #list, 1, -1 do list[i] = nil end
+        return list
+    end
+    if type(list) == "table" and db and not InDungeonOrRaid() then
+        for i = #list, 1, -1 do
+            local setting = type(list[i]) == "table" and INSTANCE_ONLY[list[i].key]
+            if setting and db[setting] then table.remove(list, i) end
+        end
+    end
+    if type(list) == "table" and db and db.druidSelfOnly then
+        local other
+        for i = #list, 1, -1 do
+            local family = DruidFamily(list[i])
+            if family then
+                if other == nil then other = nt.OtherDruid() end
+                if other and nt.PlayerHas(family.spells) then table.remove(list, i) end
+            end
+        end
+    end
+    return list
 end
 
 -- ---------------------------------------------------------------------------
