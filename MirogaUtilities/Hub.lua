@@ -239,6 +239,18 @@ end
 -- ---------------------------------------------------------------------------
 -- page: fixed title block, scrolling body with a cursor for rows
 
+-- every settings row, for the sidebar search: { label, desc, page, y, section, row }
+local SEARCH = {}
+
+-- module switches changed this session (header switches and Home): a reload starts them
+local pending, startState = {}, {}
+local function SetModulePending(key, on)
+    if startState[key] == nil then startState[key] = not root.IsOff(key) end
+    root.SetModule(key, on)
+    pending[key] = (on ~= startState[key]) or nil
+    if root.UpdateReloadBar then root.UpdateReloadBar() end
+end
+
 local function NewPage(parent, title, subtitle)
     local page = CreateFrame("Frame", nil, parent)
     page:SetAllPoints()
@@ -248,6 +260,7 @@ local function NewPage(parent, title, subtitle)
     local head = Text(page, 22)
     head:SetPoint("TOPLEFT", PAD, -22)
     head:SetText(title)
+    page.head = head
     local sub = Text(page, 12, T.muted)
     sub:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, -6)
     sub:SetPoint("RIGHT", page, "RIGHT", -PAD - 30, 0)
@@ -304,6 +317,7 @@ local function Section(page, text)
     local fs = Text(page.body, 11, { 1, 1, 1, 0.45 })
     fs:SetPoint("TOPLEFT", PAD + 2, page.y)
     fs:SetText(text:upper())
+    page.section = text
     page.y = page.y - 20
     page.rows = 0
     return fs
@@ -330,6 +344,9 @@ local function Row(page, label, desc, height)
     end
     name:SetText(label or "")
     row.name = name
+    if label and label ~= "" and page.key then
+        SEARCH[#SEARCH + 1] = { label = label, desc = desc, page = page, y = page.y, section = page.section, row = row }
+    end
     page.y = page.y - row:GetHeight() - 2
     return row
 end
@@ -1595,37 +1612,54 @@ end
 -- ---------------------------------------------------------------------------
 -- home: every module with its switch; a change needs a reload
 
+local TABS -- the sidebar, below; Home groups its switches the same way
+
 local function BuildHomePage(page)
-    Section(page, "Modules")
-    local changed = {}
-    local reloadRow
-    local function update()
-        local any = next(changed) ~= nil
-        if reloadRow then reloadRow:SetShown(any) end
-    end
-    for _, m in ipairs(root.MODULES) do
+    local byKey, listed = {}, {}
+    for _, m in ipairs(root.MODULES) do byKey[m.key] = m end
+    local function Switch(m)
+        if not m or listed[m.key] then return end
+        listed[m.key] = true
         local key = m.key
-        local start = not root.IsOff(key)
         ToggleRow(page, m.label, m.desc,
             function() return not root.IsOff(key) end,
-            function(v)
-                root.SetModule(key, v)
-                if v == start then changed[key] = nil else changed[key] = true end
-                update()
-            end)
+            function(v) SetModulePending(key, v) end)
     end
-    page.y = page.y - 6
-    reloadRow = Row(page, "|cffffcc00Changes start after a reload.|r", nil, 34)
-    local reload = FlatButton(reloadRow, "Reload now", 130, function() ReloadUI() end, true)
-    reload:SetPoint("RIGHT", -12, 0)
-    reloadRow:Hide()
-    Note(page, "A module that is off does not start at all: no events, no hooks, no memory. Its settings stay saved.")
+    local group, entries = nil, {}
+    local function Flush()
+        local ms = {}
+        for _, tab in ipairs(entries) do
+            if tab.module then ms[#ms + 1] = byKey[tab.module] end
+            for _, sub in ipairs(tab.subs or {}) do
+                if sub.module then ms[#ms + 1] = byKey[sub.module] end
+            end
+        end
+        local fresh = {}
+        for _, m in ipairs(ms) do if not listed[m.key] then fresh[#fresh + 1] = m end end
+        if #fresh > 0 then
+            Section(page, group or "Modules")
+            for _, m in ipairs(fresh) do Switch(m) end
+        end
+        entries = {}
+    end
+    for _, tab in ipairs(TABS) do
+        if tab.group then Flush(); group = tab.group
+        elseif tab.key ~= "home" then entries[#entries + 1] = tab end
+    end
+    Flush()
+    local rest = {}
+    for _, m in ipairs(root.MODULES) do if not listed[m.key] then rest[#rest + 1] = m end end
+    if #rest > 0 then
+        Section(page, "Other")
+        for _, m in ipairs(rest) do Switch(m) end
+    end
+    Note(page, "A module that is off does not start at all: no events, no hooks, no memory. Its settings stay saved. Every page also has its module's switch next to the title.")
     BuildHelpPage(page)   -- the slash commands below the switches
 end
 
 -- sidebar entries; an entry with subs gets a small tab strip in its header.
 -- Sub keys stay the page keys, so OpenHub("weather") still works.
-local TABS = {
+TABS = {
     { key = "home", label = "Home", sub = "Modules on or off, and every slash command.",
         icon = "Interface\\Icons\\Ability_Druid_CatForm", build = BuildHomePage },
     { group = "COMBAT" },
@@ -1646,25 +1680,27 @@ local TABS = {
         { key = "marks", label = "Auto mark", module = "AutoMark", sub = "Raid marks on your own group, nobody else in it.", build = BuildMarksPage },
         { key = "friends", label = "Friend tooltips", module = "FriendTips", sub = "Class, level, faction, zone and more when you hover a friend.", build = BuildFriendTipsPage },
     } },
-    { group = "GOLD & UI" },
+    { group = "GOLD" },
     { key = "gold", label = "Vendor & stockpile", icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", subs = {
         { key = "vendor", label = "Vendor coin", sub = "Red coin on items the vendor pays more for than the AH.", build = BuildVendorPage },
         { key = "stockpile", label = "Stockpile", sub = "Keep raid materials for later, see cheap prices, snipe them.", build = BuildStockpilePage },
     } },
+    { group = "OTHER ADDONS" },
     { key = "naowhgroup", label = "Naowh", icon = "Interface\\Icons\\INV_Scroll_03", subs = {
         { key = "naowh", label = "Tweaks", module = "NaowhTweaks", sub = "Small changes to Naowh Forever, without touching its files.", build = BuildNaowhPage },
         { key = "merge", label = "Update merge", module = "UpdateMerge", sub = "After a Naowh update: OLD or NEW for every setting that changed.", build = BuildMergePage },
     } },
+    { key = "fixes", label = "Addon fixes", sub = "Other addons' errors and quirks fixed at the source, without touching their files.",
+        icon = "Interface\\Icons\\INV_Misc_Wrench_01", module = "AddonFixes", build = BuildFixesPage },
     { group = "WORLD & CHAT" },
     { key = "world", label = "World", icon = "Interface\\Icons\\INV_Misc_Spyglass_03", subs = {
         { key = "graphics", label = "Graphics", module = "Graphics", sub = "Fuller grass, sharper picture, gamma: written after every login.", build = BuildGraphicsPage },
         { key = "weather", label = "Weather", module = "Weather", sub = "One click: storms low. Next click: your old weather back.", build = BuildWeatherPage },
         { key = "layer", label = "LayerSwap", module = "LayerHost", sub = "Host off by default, on only when you turn it on.", build = BuildLayerPage },
     } },
-    { key = "chat", label = "Quiet & fixes", icon = "Interface\\Icons\\INV_Misc_Note_02", subs = {
+    { key = "chat", label = "Quiet chat", icon = "Interface\\Icons\\INV_Misc_Note_02", subs = {
         { key = "quiet", label = "Login", module = "LoginQuiet", sub = "No addon spam in the chat after login or /reload.", build = BuildQuietPage },
         { key = "bgquiet", label = "Battlegrounds", module = "BGQuiet", sub = "Battlegrounds without error sounds and chat spam.", build = BuildBGQuietPage },
-        { key = "fixes", label = "Addon fixes", module = "AddonFixes", sub = "Other addons' battleground errors stopped at the source.", build = BuildFixesPage },
     } },
 }
 
@@ -1729,12 +1765,45 @@ local function SubStrip(page, tab, ownKey)
     end
 end
 
+local MODULE_BY_KEY
+local function HeaderSwitch(page, module)
+    if not MODULE_BY_KEY then
+        MODULE_BY_KEY = {}
+        for _, m in ipairs(root.MODULES or {}) do MODULE_BY_KEY[m.key] = m end
+    end
+    if not (module and MODULE_BY_KEY[module]) then return end
+    local state = Text(page, 11, T.muted)
+    local sw = Toggle(page, function() return not root.IsOff(module) end, function(v)
+        SetModulePending(module, v)
+    end)
+    sw:SetPoint("LEFT", page.head, "RIGHT", 14, -1)
+    state:SetPoint("LEFT", sw, "RIGHT", 8, 0)
+    local function paint()
+        sw.Refresh()
+        local on = not root.IsOff(module)
+        local live = not IsStopped(module)
+        if on ~= live then
+            state:SetText("|cffffcc00" .. (on and "on after reload" or "off after reload") .. "|r")
+        else
+            state:SetText(on and "on" or "off")
+        end
+    end
+    local click = sw:GetScript("OnClick")
+    sw:SetScript("OnClick", function(...) click(...); paint() end)
+    page.refreshers[#page.refreshers + 1] = paint
+    paint()
+end
+
 local function BuildPage(content, tab, spec, parentKey)
     local page = NewPage(content, tab.label, spec.sub)
     pages[spec.key] = page
     parentOf[spec.key] = parentKey
-    if IsStopped(spec.module or tab.module) then
-        Note(page, "This module is off. Turn it on under Home, then reload.")
+    page.key = spec.key
+    page.path = tab.subs and (tab.label .. "  ›  " .. spec.label) or tab.label
+    local module = spec.module or tab.module
+    HeaderSwitch(page, module)
+    if IsStopped(module) then
+        Note(page, "This module is off. Switch it on next to the title, then reload.")
         page:Finish()
     else
         local ok, err = pcall(spec.build, page)
@@ -1804,10 +1873,102 @@ local function BuildHub()
     close:SetScript("OnLeave", function() x:SetTextColor(1, 1, 1, 0.5) end)
     close:SetScript("OnClick", function() f:Hide() end)
 
-    local y = -78
+    -- reload bar: module switches changed this session
+    local reloadBar = CreateFrame("Frame", nil, content)
+    reloadBar:SetPoint("BOTTOMLEFT", 0, 0)
+    reloadBar:SetPoint("BOTTOMRIGHT", 0, 0)
+    reloadBar:SetHeight(42)
+    reloadBar:SetFrameLevel(content:GetFrameLevel() + 30)
+    Fill(reloadBar, { 0.16, 0.14, 0.05, 0.97 }):SetAllPoints()
+    local reloadText = Text(reloadBar, 12, { 1, 0.8, 0 })
+    reloadText:SetPoint("LEFT", PAD, 0)
+    reloadText:SetText("Module switches changed: they take effect after a reload.")
+    local reloadButton = FlatButton(reloadBar, "Reload now", 130, function() ReloadUI() end, true)
+    reloadButton:SetPoint("RIGHT", -PAD, 0)
+    reloadBar:Hide()
+    function root.UpdateReloadBar()
+        reloadBar:SetShown(next(pending) ~= nil)
+        if current and pages[current] then pages[current]:Refresh() end
+    end
+
+    -- search: results page plus the box at the top of the sidebar
+    local results = NewPage(content, "Search", "Settings that match. Click one to go there.")
+    pages.search, parentOf.search = results, "search"
+    local resultRows, lastPage = {}, "home"
+    local function ShowResult(rec)
+        SelectTab(rec.page.key)
+        local scroll = rec.page.scroll
+        local maxScroll = math.max(0, rec.page.body:GetHeight() - scroll:GetHeight())
+        scroll:SetVerticalScroll(math.max(0, math.min(maxScroll, -rec.y - 60)))
+        local flash = rec.row.flash
+        if not flash then
+            flash = Fill(rec.row, { ACCENT[1], ACCENT[2], ACCENT[3], 0.22 }, "BORDER")
+            flash:SetAllPoints()
+            rec.row.flash = flash
+        end
+        flash:Show()
+        C_Timer.After(1.5, function() flash:Hide() end)
+    end
+    local function RunSearch(text)
+        text = strlower(strtrim(text or ""))
+        if #text < 2 then
+            if current == "search" then SelectTab(lastPage) end
+            return
+        end
+        if current ~= "search" then lastPage = current or "home" end
+        local found = {}
+        for _, rec in ipairs(SEARCH) do
+            local hay = strlower((rec.label or "") .. " " .. (rec.desc or "") .. " " .. (rec.section or "") .. " " .. (rec.page.path or ""))
+            if hay:find(text, 1, true) then found[#found + 1] = rec end
+            if #found >= 40 then break end
+        end
+        for i = 1, math.max(#found, #resultRows) do
+            local rec, b = found[i], resultRows[i]
+            if rec and not b then
+                b = CreateFrame("Button", nil, results.body)
+                b:SetPoint("TOPLEFT", PAD, -12 - (i - 1) * 46)
+                b:SetPoint("TOPRIGHT", -PAD, -12 - (i - 1) * 46)
+                b:SetHeight(44)
+                b.bg = Fill(b, { 0, 0, 0, i % 2 == 1 and 0.12 or 0.22 })
+                b.bg:SetAllPoints()
+                local hl = b:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetAllPoints()
+                hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.12)
+                b.label = Text(b, 13)
+                b.label:SetPoint("TOPLEFT", 12, -8)
+                b.path = Text(b, 11, T.muted)
+                b.path:SetPoint("TOPLEFT", b.label, "BOTTOMLEFT", 0, -4)
+                b.path:SetPoint("RIGHT", -12, 0)
+                b.path:SetWordWrap(false)
+                b:SetScript("OnClick", function(self) if self.rec then ShowResult(self.rec) end end)
+                resultRows[i] = b
+            end
+            if b then
+                b.rec = rec
+                b:SetShown(rec ~= nil)
+                if rec then
+                    b.label:SetText(rec.label)
+                    b.path:SetText("|cff" .. ACCENT_HEX .. rec.page.path .. "|r" .. (rec.section and ("  ›  " .. rec.section) or ""))
+                end
+            end
+        end
+        results.y = -12 - #found * 46
+        if not results.empty then
+            results.empty = Text(results.body, 12, T.muted)
+            results.empty:SetPoint("TOPLEFT", PAD + 2, -16)
+            results.empty:SetText("Nothing found.")
+        end
+        results.empty:SetShown(#found == 0)
+        results:Finish()
+        SelectTab("search")
+    end
+    local search = Input(side, SIDEBAR_W - 26, "Search settings", nil, RunSearch)
+    search:SetPoint("TOPLEFT", 12, -76)
+
+    local y = -114
     for _, tab in ipairs(TABS) do
         if tab.group then
-            if y < -78 then y = y - 8 end
+            if y < -114 then y = y - 8 end
             local g = Text(side, 10, { 1, 1, 1, 0.4 })
             g:SetPoint("TOPLEFT", 20, y)
             g:SetText(tab.group)

@@ -34,10 +34,10 @@ Settings = nil
 local root = { ACCENT = { 0, 1, 1 }, ACCENT_HEX = "40e0d0", Say = function() end }
 root.Stopped = function(m) return m == "Weather" end
 root.CombatText, root.FlagPlates = { }, { }
-for _, m in ipairs({ "Powershift", "AutoMark", "FriendTips", "VendorCoin", "Stockpile", "NaowhTweaks", "UpdateMerge", "LayerHost", "AddonFixes", "Weather", "Graphics", "BGQuiet", "LoginQuiet" }) do
+for _, m in ipairs({ "Powershift", "AutoMark", "FriendTips", "VendorCoin", "Stockpile", "NaowhTweaks", "UpdateMerge", "LayerHost", "AddonFixes", "TargetDebuffs", "Weather", "Graphics", "BGQuiet", "LoginQuiet" }) do
     root[m] = setmetatable({}, { __index = function() return stub() end })
 end
-root.MODULES = {}
+root.MODULES = { { key = "Weather", label = "Weather", desc = "w" }, { key = "Graphics", label = "Graphics", desc = "g" } }
 root.IsOff = function() return false end
 assert(loadfile("MirogaUtilities/Hub.lua"))("MirogaUtilities", root)
 
@@ -46,11 +46,15 @@ local okRun, err = pcall(root.OpenHub, "weather")
 ok(okRun, "window builds: " .. tostring(err))
 local function has(t) for _, v in ipairs(texts) do if v == t then return true end end return false end
 for _, label in ipairs({ "Combat text", "Flagged players", "Vendor & stockpile", "Naowh", "World",
-    "Display", "Events & colors", "List", "Plates & alerts", "Graphics", "Weather", "LayerSwap", "Login", "Battlegrounds", "Addon fixes", "Quiet & fixes", "Group & friends", "Friend tooltips" }) do
+    "Display", "Events & colors", "List", "Plates & alerts", "Graphics", "Weather", "LayerSwap", "Login", "Battlegrounds", "Addon fixes", "Quiet chat", "Target debuffs", "Group & friends", "Friend tooltips" }) do
     ok(has(label), "label " .. label)
 end
 ok(has("Stockpile"), "stockpile sub tab")
-ok(has("This module is off. Turn it on under Home, then reload."), "stopped weather page says so")
+ok(has("This module is off. Switch it on next to the title, then reload."), "stopped weather page says so")
+ok(has("Search settings"), "search box in the sidebar")
+ok(has("|cffffcc00on after reload|r"), "header switch: weather on, but stopped this session")
+ok(has("on"), "header switch: graphics on")
+ok(has("WORLD & CHAT"), "home groups switches like the sidebar")
 ok(pcall(root.OpenHub, "combat"), "sidebar key opens its first page")
 ok(pcall(root.OpenHub, "nope"), "unknown key falls back home")
 print(("%d checks, %d failures"):format(n, bad))

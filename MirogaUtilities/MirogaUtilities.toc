@@ -2,7 +2,7 @@
 ## Title: Miroga Utilities
 ## Notes: Personal Forever tools: druid powershift without the action bar bug, target debuffs from anyone (Demoralizing Shout, Faerie Fire), combat text, flagged nameplates, auto raid marks, detailed friend tooltips, weather switch, quiet login, vendor coin, stockpile, Naowh tweaks, an update merge for Naowh profiles and LayerSwap host off by default (no swap lock), fixes for other addons' battleground errors. Every module can be turned off on the home page.
 ## Author: Karl
-## Version: 1.25.0
+## Version: 1.26.0
 ## IconTexture: Interface\Icons\Ability_Druid_CatForm
 ## AddonCompartmentFunc: MirogaUtilities_OnCompartmentClick
 ## SavedVariables: KPCombatTextDB, KPFlagPlatesDB, MirogaAutoMarkDB, MirogaWeatherDB, MirogaUtilitiesDB, MirogaVendorDB, MirogaStockpileDB, MirogaUpdateMergeDB, MirogaGraphicsDB
