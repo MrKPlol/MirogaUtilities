@@ -22,7 +22,15 @@ ProcDocAuraFrame = { script = function(_, _, unit, info) got = { unit = unit, in
 function ProcDocAuraFrame:GetScript() return self.script end
 function ProcDocAuraFrame:SetScript(_, fn) self.script = fn end
 local wimCalls = 0
-WIM = { modules = { WhisperEngine = { CHAT_MSG_SYSTEM = function() wimCalls = wimCalls + 1 end } } }
+local filterCalls = 0
+local function wimFilter() filterCalls = filterCalls + 1; return true end
+WIM = { modules = { WhisperEngine = { enabled = true, ChatMessageEventFilter = wimFilter,
+    CHAT_MSG_SYSTEM = function() wimCalls = wimCalls + 1 end } } }
+local chatFilters = {}
+ChatFrameUtil = {
+    AddMessageEventFilter = function(e, f) chatFilters[e] = chatFilters[e] or {}; chatFilters[e][f] = true end,
+    RemoveMessageEventFilter = function(e, f) if chatFilters[e] then chatFilters[e][f] = nil end end }
+for _, e in ipairs({ "CHAT_MSG_SYSTEM", "CHAT_MSG_BN_INLINE_TOAST_ALERT" }) do ChatFrameUtil.AddMessageEventFilter(e, wimFilter) end
 local reads = 0
 NaowhForever = { Completo = { Holidays = { Read = function() reads = reads + 1 end } } }
 local checks = 0
@@ -60,8 +68,24 @@ local lockedInfo = locked({})
 frame.script(frame, "UNIT_AURA", "player", lockedInfo)
 ok(got.info == lockedInfo, "switched off: passes through")
 
--- WIM
+-- WIM: friend online lines
 local engine = WIM.modules.WhisperEngine
+local wrap = engine.ChatMessageEventFilter
+ok(af.installed.wimonline and wrap ~= wimFilter, "online fix wraps the filter")
+ok(chatFilters.CHAT_MSG_BN_INLINE_TOAST_ALERT[wrap] and not chatFilters.CHAT_MSG_BN_INLINE_TOAST_ALERT[wimFilter], "registered filter swapped")
+ok(chatFilters.CHAT_MSG_SYSTEM[wrap] and not chatFilters.CHAT_MSG_SYSTEM[wimFilter], "swapped on other events too")
+local chat = {}
+ok(wrap(chat, "CHAT_MSG_BN_INLINE_TOAST_ALERT", "FRIEND_ONLINE", "x") == false and filterCalls == 0, "online line passes")
+ok(wrap(chat, "CHAT_MSG_BN_INLINE_TOAST_ALERT", "FRIEND_OFFLINE", "x") == false and af.hits.wimonline == 2, "offline line passes")
+ok(wrap(chat, "CHAT_MSG_BN_INLINE_TOAST_ALERT", "FRIEND_REQUEST", "x") == true and filterCalls == 1, "other alerts: WIM decides")
+ok(wrap({ _isWIM = true }, "CHAT_MSG_BN_INLINE_TOAST_ALERT", "FRIEND_ONLINE") == true and filterCalls == 2, "WIM windows untouched")
+ok(wrap(chat, "CHAT_MSG_BN_INLINE_TOAST_ALERT", SECRET) == true, "secret kind: WIM decides")
+ok(wrap(chat, "CHAT_MSG_WHISPER", "hi") == true, "whispers: WIM decides")
+af.Set("wimonline", false)
+ok(wrap(chat, "CHAT_MSG_BN_INLINE_TOAST_ALERT", "FRIEND_ONLINE") == true, "switched off: WIM decides")
+af.Set("wimonline", true)
+
+-- WIM
 engine:CHAT_MSG_SYSTEM("x"); ok(wimCalls == 1, "outside: replay runs")
 instance = "pvp"; engine:CHAT_MSG_SYSTEM("x"); ok(wimCalls == 1 and af.hits.wim == 1, "BG: no replay")
 instance = "none"; C_ChatInfo.InChatMessagingLockdown = function() return true end

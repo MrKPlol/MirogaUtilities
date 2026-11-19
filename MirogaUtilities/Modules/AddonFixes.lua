@@ -16,6 +16,12 @@
 --   NaowhForever_Discovery 1.3  ~190x calendarType is secret in a BG, Holidays.Read
 --                     compares it. Fix: Read waits while the calendar is locked
 --                     and the holidays read before stay.
+--   WIM 3.19.7        no "X has come online/gone offline" line in the main chat for
+--                     Battle.net friends (WIM issue #318): its chat filter treats
+--                     BN_INLINE_TOAST_ALERT like a whisper and hides it whenever
+--                     "pop up on receive" is on, though no window opens. Fix: the
+--                     filter lets online/offline alerts through to normal chat
+--                     frames; WIM's own windows still get them.
 --   HappyCamper 1.1   JoinTemporaryChannel blocked: its channel check rejoins the
 --                     camp channel from a timer, which a BG forbids. Fix: no
 --                     channel check while in a BG or arena.
@@ -31,12 +37,14 @@ af.FIXES = {
         desc = "Hands ProcDoc the aura event without the locked lists; it scans your buffs instead." },
     { key = "wim", addon = "WIM", label = "WIM: chat filter replay",
         desc = "WIM no longer replays system lines through the chat filters in battlegrounds." },
+    { key = "wimonline", addon = "WIM", label = "WIM: friend online lines",
+        desc = "Battle.net friends coming online or going offline show in the main chat again." },
     { key = "naowh", addon = "NaowhForever_Discovery", label = "Naowh Discovery: holiday calendar",
         desc = "Holiday check waits while the calendar is locked; the last known holidays stay." },
     { key = "happycamper", addon = "HappyCamper", label = "HappyCamper: channel rejoin",
         desc = "No camp channel check in battlegrounds and arenas, where joining is blocked." },
 }
-af.DEFAULTS = { procdoc = true, wim = true, naowh = true, happycamper = true }
+af.DEFAULTS = { procdoc = true, wim = true, wimonline = true, naowh = true, happycamper = true }
 af.hits = {}        -- [key] = times stepped in this session
 af.installed = {}   -- [key] = true once wrapped
 
@@ -132,6 +140,40 @@ local function FixWIM()
     return true
 end
 
+-- the chat events WIM's WhisperEngine filters (WhisperEngine.lua CHAT_EVENTS)
+af.WIM_FILTER_EVENTS = { "CHAT_MSG_WHISPER", "CHAT_MSG_WHISPER_INFORM", "CHAT_MSG_AFK", "CHAT_MSG_DND",
+    "CHAT_MSG_SYSTEM", "CHAT_MSG_BN_WHISPER", "CHAT_MSG_BN_WHISPER_INFORM", "CHAT_MSG_BN_INLINE_TOAST_ALERT" }
+local ONLINE_KINDS = { FRIEND_ONLINE = true, FRIEND_OFFLINE = true }
+
+-- WIM registers WhisperEngine.ChatMessageEventFilter by reference in OnEnable.
+-- The field is swapped for a wrapper; if WIM already registered the original,
+-- that one is taken out of the filter list and the wrapper put in.
+local function FixWIMOnline()
+    local engine = type(WIM) == "table" and type(WIM.modules) == "table" and WIM.modules.WhisperEngine
+    local original = engine and engine.ChatMessageEventFilter
+    if type(original) ~= "function" then return false end
+    local wrapper = function(frame, event, ...)
+        if On("wimonline") and event == "CHAT_MSG_BN_INLINE_TOAST_ALERT" and not (type(frame) == "table" and frame._isWIM) then
+            local kind = ...
+            if not issecret(kind) and ONLINE_KINDS[kind] then
+                Hit("wimonline")
+                return false
+            end
+        end
+        return original(frame, event, ...)
+    end
+    engine.ChatMessageEventFilter = wrapper
+    local add = (ChatFrameUtil and ChatFrameUtil.AddMessageEventFilter) or ChatFrame_AddMessageEventFilter
+    local remove = (ChatFrameUtil and ChatFrameUtil.RemoveMessageEventFilter) or ChatFrame_RemoveMessageEventFilter
+    if add and remove and engine.enabled then
+        for _, event in ipairs(af.WIM_FILTER_EVENTS) do
+            remove(event, original)
+            add(event, wrapper)
+        end
+    end
+    return true
+end
+
 -- ---------------------------------------------------------------------------
 -- NaowhForever_Discovery
 
@@ -187,7 +229,7 @@ local function FixHappyCamper()
     return true
 end
 
-local INSTALL = { procdoc = FixProcDoc, wim = FixWIM, naowh = FixNaowh, happycamper = FixHappyCamper }
+local INSTALL = { procdoc = FixProcDoc, wim = FixWIM, wimonline = FixWIMOnline, naowh = FixNaowh, happycamper = FixHappyCamper }
 
 -- wraps every fix whose addon is loaded and not wrapped yet; a fix that is
 -- switched off stays wrapped but passes everything through
