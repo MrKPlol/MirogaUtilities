@@ -90,6 +90,16 @@ LayerSwapDB.hostLockUntil = nil; lh.Set("noLock", true)
 local t = { hosting = true, hostLockUntil = now + 100, hostLockWho = "Miroga" }
 LayerSwapDB = t
 ok(lh.GuardLock() and t.hostLockUntil == nil, "running lock removed at start")
+-- hourly swap limit: LayerSwap's count never lands, an old one is cleared
+LayerSwapDB = { hosting = true, limit = { who = "Miroga", start = now, moves = { now } } }
+ok(lh.GuardLock() and rawget(LayerSwapDB, "limit") == nil, "old swap count cleared")
+LayerSwapDB.limit = { who = "Miroga", start = now, moves = { now } }
+ok(rawget(LayerSwapDB, "limit") == nil and lh.capDropped >= 1 and lh.CapGuarded(), "new swap count dropped")
+lh.Set("noCap", false)
+LayerSwapDB.limit = { who = "Miroga", start = now, moves = {} }
+ok(rawget(LayerSwapDB, "limit") ~= nil and not lh.CapGuarded(), "switch off: LayerSwap counts again")
+lh.Set("noCap", true)
+
 -- someone else's metatable is never replaced
 LayerSwapDB = setmetatable({ hosting = true }, {})
 ok(not lh.GuardLock(), "foreign metatable left alone")

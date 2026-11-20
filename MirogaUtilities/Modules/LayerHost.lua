@@ -24,7 +24,7 @@ local _, root = ...
 local lh = {}
 root.LayerHost = lh
 
-lh.DEFAULTS = { enabled = true, wantHost = false, noLock = true }
+lh.DEFAULTS = { enabled = true, wantHost = false, noLock = true, noCap = true }
 
 local function Present()
     return type(LayerSwapDB) == "table" and SlashCmdList and type(SlashCmdList.LAYERSWAP) == "function"
@@ -50,12 +50,19 @@ local LOCK_KEYS = { hostLockUntil = true, hostLockWho = true }
 local function LockWanted()
     return not (lh.db and lh.db.enabled and lh.db.noLock)
 end
+-- LayerSwap's count of 10 swaps an hour (LayerSwapDB.limit, 1.14.38+): kept
+-- out while "No hourly swap limit" is on, so its wait never starts
+local function CapWanted()
+    return not (lh.db and lh.db.enabled and lh.db.noCap)
+end
+lh.capDropped = lh.capDropped or 0
 
 -- the metatable is only ever added to LayerSwap's saved table, never to one
 -- that already has a metatable of its own
 function lh.GuardLock()
-    if not Present() or LockWanted() then return false end
+    if not Present() or (LockWanted() and CapWanted()) then return false end
     local t = LayerSwapDB
+    if not CapWanted() and rawget(t, "limit") ~= nil then rawset(t, "limit", nil) end
     local mt = getmetatable(t)
     if mt then return mt.mirogaLock == true end
     if rawget(t, "hostLockUntil") ~= nil then
@@ -64,6 +71,11 @@ function lh.GuardLock()
         lh.dropped = lh.dropped + 1
     end
     setmetatable(t, { mirogaLock = true, __newindex = function(tbl, key, value)
+        if key == "limit" and value ~= nil and not CapWanted() then
+            lh.capDropped = lh.capDropped + 1
+            if lh.OnChange then lh.OnChange() end
+            return
+        end
         if LOCK_KEYS[key] and value ~= nil and not LockWanted() then
             if key == "hostLockUntil" then
                 lh.dropped = lh.dropped + 1
@@ -79,6 +91,10 @@ end
 function lh.LockGuarded()
     local mt = Present() and getmetatable(LayerSwapDB)
     return mt and mt.mirogaLock == true and not LockWanted() or false
+end
+function lh.CapGuarded()
+    local mt = Present() and getmetatable(LayerSwapDB)
+    return mt and mt.mirogaLock == true and not CapWanted() or false
 end
 
 -- runs inside a click; true when it turned Host off
@@ -94,12 +110,19 @@ local LOCK_KEYS = { hostLockUntil = true, hostLockWho = true }
 local function LockWanted()
     return not (lh.db and lh.db.enabled and lh.db.noLock)
 end
+-- LayerSwap's count of 10 swaps an hour (LayerSwapDB.limit, 1.14.38+): kept
+-- out while "No hourly swap limit" is on, so its wait never starts
+local function CapWanted()
+    return not (lh.db and lh.db.enabled and lh.db.noCap)
+end
+lh.capDropped = lh.capDropped or 0
 
 -- the metatable is only ever added to LayerSwap's saved table, never to one
 -- that already has a metatable of its own
 function lh.GuardLock()
-    if not Present() or LockWanted() then return false end
+    if not Present() or (LockWanted() and CapWanted()) then return false end
     local t = LayerSwapDB
+    if not CapWanted() and rawget(t, "limit") ~= nil then rawset(t, "limit", nil) end
     local mt = getmetatable(t)
     if mt then return mt.mirogaLock == true end
     if rawget(t, "hostLockUntil") ~= nil then
@@ -108,6 +131,11 @@ function lh.GuardLock()
         lh.dropped = lh.dropped + 1
     end
     setmetatable(t, { mirogaLock = true, __newindex = function(tbl, key, value)
+        if key == "limit" and value ~= nil and not CapWanted() then
+            lh.capDropped = lh.capDropped + 1
+            if lh.OnChange then lh.OnChange() end
+            return
+        end
         if LOCK_KEYS[key] and value ~= nil and not LockWanted() then
             if key == "hostLockUntil" then
                 lh.dropped = lh.dropped + 1
@@ -123,6 +151,10 @@ end
 function lh.LockGuarded()
     local mt = Present() and getmetatable(LayerSwapDB)
     return mt and mt.mirogaLock == true and not LockWanted() or false
+end
+function lh.CapGuarded()
+    local mt = Present() and getmetatable(LayerSwapDB)
+    return mt and mt.mirogaLock == true and not CapWanted() or false
 end
     SlashCmdList.LAYERSWAP("off")
     if not lh.Hosting() then

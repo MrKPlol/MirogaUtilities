@@ -6,8 +6,9 @@
 -- Slots (one per effect, any rank, any caster):
 --   Demoralizing: Demoralizing Shout or Demoralizing Roar (they do not stack)
 --   Faerie Fire:  Faerie Fire or Faerie Fire (Feral)
--- An icon shows only while ANOTHER player's debuff is on the target (yours
--- show in EllesmereUI's own bar); nothing else, no placeholders.
+-- An icon shows only while the debuff is on the target, yours or another
+-- player's; nothing else, no placeholders. Moonfire stays in EllesmereUI's bar,
+-- where its "Always Show" is switched off so it too shows only while it ticks.
 -- PvE only: hidden in battlegrounds, arenas and on player targets. Auras the
 -- game keeps secret (boss encounters, if Forever locks them) leave the slot dim.
 local _, root = ...
@@ -20,7 +21,7 @@ td.SLOTS = {
     { key = "ff", label = "Faerie Fire",
         spells = { { id = 770, name = "Faerie Fire" }, { id = 16857, name = "Faerie Fire (Feral)" } } },
 }
-td.DEFAULTS = { demo = true, ff = true, cdmTrack = true, matchBar = true, size = 36, x = 2, y = 0, side = "LEFT" }
+td.DEFAULTS = { demo = true, ff = true, mine = true, moonfire = true, cdmTrack = false, matchBar = true, size = 36, x = 2, y = 0, side = "LEFT" }
 td.ANCHOR = "ECME_CDMBar_buffs" -- EllesmereUI CDM bar 3 ("buffs"), Moonfire's bar
 
 local issecret = issecretvalue or function() return false end
@@ -52,8 +53,8 @@ local function Mine(aura)
 end
 td.Mine = Mine
 
--- another player's aura of the slot on the target: { icon, expirationTime,
--- duration } or nil. Yours never count (EllesmereUI's bar shows them).
+-- the slot's aura on the target: { icon, expirationTime, duration, mine } or
+-- nil. Yours count unless "mine" is off; another player's always.
 function td.Find(slot)
     local byIndex = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
     if not byIndex then return nil end
@@ -64,10 +65,11 @@ function td.Find(slot)
         if not ok or aura == nil then break end
         if type(aura) == "table" and not issecret(aura) then
             local name = aura.name
-            if not issecret(name) and names[name] and not Mine(aura) then
+            local mine = not issecret(name) and names[name] and Mine(aura)
+            if not issecret(name) and names[name] and (Opt("mine") or not mine) then
                 local exp, dur = aura.expirationTime, aura.duration
                 if issecret(exp) or issecret(dur) then exp, dur = nil, nil end
-                return { icon = (not issecret(aura.icon)) and aura.icon or nil, expirationTime = exp, duration = dur }
+                return { icon = (not issecret(aura.icon)) and aura.icon or nil, expirationTime = exp, duration = dur, mine = mine }
             end
         end
     end
@@ -296,6 +298,43 @@ function td.FixCDM()
     return okRun and moved or 0
 end
 
+-- Moonfire in EllesmereUI's bar: Naowh's profile sets it to "Always Show", so
+-- it sits there grey with no target. Switched to "off" in the active profile
+-- (every spec), so it shows only while your Moonfire is on the target. EUI
+-- reads the setting on every refresh. Undone when the option is switched off.
+td.MOONFIRE = { [8921] = true, [8924] = true, [8925] = true, [8926] = true, [8927] = true,
+    [8928] = true, [8929] = true, [9833] = true, [9834] = true, [9835] = true, [164812] = true }
+
+local function SpecProfiles()
+    local db = EllesmereUIDB
+    local sa = type(db) == "table" and db.spellAssignments
+    local prof = sa and sa.profiles and sa.profiles[db.activeProfile or "Default"]
+    return prof and type(prof.specProfiles) == "table" and prof.specProfiles or nil
+end
+
+function td.FixMoonfire()
+    local specs = SpecProfiles()
+    if not (specs and td.db) then return 0 end
+    td.db.mfChanged = td.db.mfChanged or {}
+    local n = 0
+    for spec, sp in pairs(specs) do
+        local st = type(sp) == "table" and sp.spellSettingsBuff
+        if type(st) == "table" then
+            for id, set in pairs(st) do
+                if td.MOONFIRE[id] and type(set) == "table" then
+                    local key = tostring(spec) .. ":" .. id
+                    if Opt("moonfire") and set.alwaysShow == "on" then
+                        set.alwaysShow = "off"; td.db.mfChanged[key] = true; n = n + 1
+                    elseif not Opt("moonfire") and td.db.mfChanged[key] and set.alwaysShow == "off" then
+                        set.alwaysShow = "on"; td.db.mfChanged[key] = nil; n = n + 1
+                    end
+                end
+            end
+        end
+    end
+    return n
+end
+
 local function QueueFixCDM()
     if td.cdmQueued then return end
     td.cdmQueued = true
@@ -306,6 +345,7 @@ td.QueueFixCDM = QueueFixCDM
 function td.Set(key, value)
     if td.db then td.db[key] = value end
     if key == "cdmTrack" and value then QueueFixCDM() end
+    if key == "moonfire" then td.FixMoonfire() end
     td.Layout(); td.Update()
 end
 
@@ -322,6 +362,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
         if type(MirogaUtilitiesDB) ~= "table" then MirogaUtilitiesDB = {} end
         MirogaUtilitiesDB.targetDebuffs = MirogaUtilitiesDB.targetDebuffs or {}
         td.db = MirogaUtilitiesDB.targetDebuffs
+        td.FixMoonfire()   -- before EllesmereUI builds its bars
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
         self:RegisterEvent("PLAYER_TARGET_CHANGED")
         self:RegisterUnitEvent("UNIT_AURA", "target")
@@ -345,6 +386,7 @@ events:SetScript("OnEvent", function(self, event, arg1)
         end
         td.Update()
         C_Timer.After(3, QueueFixCDM)
+        C_Timer.After(3, td.FixMoonfire)   -- a profile switch or Naowh import
     elseif event == "PLAYER_REGEN_ENABLED" then
         if td.cdmPending then QueueFixCDM() end
     else

@@ -43,12 +43,13 @@ handler(self, "PLAYER_ENTERING_WORLD")
 local demo, ff = td.SLOTS[1], td.SLOTS[2]
 ok(td.Find(demo) == nil, "nothing on target")
 list = { { name = "Demoralizing Roar", sourceUnit = "player", isFromPlayerOrPlayerPet = true, icon = 5 } }
-ok(td.Find(demo) == nil, "my own roar: not shown (EUI bar shows it)")
+ok(td.Find(demo) and td.Find(demo).mine, "my own roar: shown")
+td.db.mine = false; ok(td.Find(demo) == nil, "mine off: own roar hidden"); td.db.mine = nil
 list = { { name = "Demoralizing Roar", sourceUnit = "player", isFromPlayerOrPlayerPet = true },
     { name = "Demoralizing Shout", sourceUnit = "party1", isFromPlayerOrPlayerPet = false, icon = 7, expirationTime = 30, duration = 30 } }
-ok(td.Find(demo) and td.Find(demo).icon == 7, "a warrior's shout: shown")
+ok(td.Find(demo) ~= nil, "roar + warrior shout: slot shown"); list = { list[2] }; ok(td.Find(demo).icon == 7 and not td.Find(demo).mine, "a warrior's shout alone: shown")
 list = { { name = "Faerie Fire", sourceUnit = SECRET, isFromPlayerOrPlayerPet = false } }
-ok(td.Find(ff) == nil, "unknown caster: not shown")
+ok(td.Find(ff) ~= nil, "unknown caster: shown")
 list = { { name = "Faerie Fire (Feral)", sourceUnit = "raid3", isFromPlayerOrPlayerPet = false } }
 ok(td.Find(ff) ~= nil, "another druid's feral FF: shown")
 list = { SECRET }
@@ -64,6 +65,16 @@ td.Update(); ok(not _G.MirogaTargetDebuffs.shown, "nothing foreign: row hidden")
 list = { { name = "Demoralizing Shout", sourceUnit = "party1", isFromPlayerOrPlayerPet = false } }
 td.Update(); ok(_G.MirogaTargetDebuffs.shown, "foreign shout: row shown")
 
+-- Moonfire's Always Show in EllesmereUI
+EllesmereUIDB.spellAssignments = { profiles = { Naowh = { specProfiles = { [102] = { spellSettingsBuff = {
+    [8921] = { alwaysShow = "on" }, [8924] = { alwaysShow = "off" }, [93402] = { alwaysShow = "on" } } } } } } }
+local mf = EllesmereUIDB.spellAssignments.profiles.Naowh.specProfiles[102].spellSettingsBuff
+ok(td.FixMoonfire() == 1 and mf[8921].alwaysShow == "off", "moonfire always-show switched off")
+ok(mf[93402].alwaysShow == "on" and mf[8924].alwaysShow == "off", "other spells untouched")
+ok(td.FixMoonfire() == 0, "second run: nothing to do")
+td.Set("moonfire", false); ok(mf[8921].alwaysShow == "on" and mf[8924].alwaysShow == "off", "option off: restored only what we changed")
+td.Set("moonfire", true); ok(mf[8921].alwaysShow == "off", "option on again")
+
 -- own FF / Roar into the cooldown manager's tracked buffs
 Enum = { CooldownViewerCategory = { TrackedBuff = 2 }, CooldownLayoutStatus = { Success = 0 } }
 function InCombatLockdown() return false end
@@ -77,6 +88,7 @@ CooldownViewerSettings = { IsShown = function() return false end,
         GetOrderedCooldownIDs = function() return { 199376, 199443, 199455 } end,
         GetCooldownInfoForID = function(_, id) return infos[id] end,
         SetCooldownToCategory = function(_, id, c) infos[id].category = c; return 0 end } end }
+td.db.cdmTrack = true
 ok(td.FixCDM() == 2 and saved == 1, "roar + ff moved to tracked buffs, saved once")
 ok(infos[199376].category == 2 and infos[199443].category == 2 and infos[199455].category == 2, "categories set")
 ok(td.FixCDM() == 0 and saved == 1, "second run: nothing to do")

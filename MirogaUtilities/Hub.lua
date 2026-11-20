@@ -1044,6 +1044,79 @@ local function BuildFriendTipsPage(page)
 end
 
 -- ---------------------------------------------------------------------------
+-- weekly reminder
+
+local function BuildWeeklyPage(page)
+    local wg = root.WeeklyReminder
+    local function db() return wg.db or wg.DEFAULTS end
+    local function T(key, label, desc)
+        ToggleRow(page, label, desc, function() return db()[key] ~= false end, function(v) wg.Set(key, v) end)
+    end
+    Section(page, "On screen")
+    T("pickup", "Weekly is up", "After the weekly reset until you pick up the quest at Pix Xizzix.")
+    T("turnin", "Turn it in", "When all three items are in your bags.")
+    T("chat", "Chat line after login", "Weekly not done yet: what is left and how many days until the reset.")
+    T("winter", "Winterspring daily", "A few seconds after login on characters that do Winterfall Intrusion, while it is open today.")
+    T("loot", "Loot alert", "Blinking item icon when a boss for your weekly dies, until the item is in your bags.")
+    Section(page, "Quest log")
+    T("questLog", "Bosses next to the items", "Boss and dungeon after every objective of the weekly.")
+    Section(page, "Status")
+    local row = Row(page, "This week", "Seen on any of your characters since the reset.")
+    local state = Text(row, 12, ACCENT, MONO ~= nil)
+    state:SetPoint("RIGHT", -14, 0)
+    state:SetJustifyH("RIGHT")
+    page.refreshers[#page.refreshers + 1] = function()
+        local q = wg.QUESTS[wg.Active() or wg.ThisWeek() or 0]
+        local s = q and q.short or "not seen yet"
+        if wg.db and wg.DoneThisWeek() then s = s .. "  |cff8a8f96(done here)|r" end
+        state:SetText(s)
+    end
+    ButtonBar(page, {
+        { "Preview", 90, function() wg.Preview(not wg.preview) end, true },
+        { "Reset position", 130, function() wg.ResetPosition() end },
+    })
+    Note(page, "Click a line to hide it until the next login or /reload; it comes back while still true. Shift-drag a line to move them. Hidden in battlegrounds and arenas. Everything here only runs on level 60 characters.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
+-- mail helper
+
+local function BuildMailPage(page)
+    local mh = root.MailHelper
+    local function db() return mh.db or mh.DEFAULTS end
+    Section(page, "Recipient")
+    ToggleRow(page, "Fill in the other character", "On the send tab, when the recipient is empty: one character of the pair writes to the other.",
+        function() return db().recipient ~= false end, function(v) mh.Set("recipient", v) end)
+    for _, key in ipairs({ "a", "b" }) do
+        local row = Row(page, key == "a" and "Character 1" or "Character 2", nil, 40)
+        local input = Input(row, 230, "Name Surname", function(text) mh.Set(key, text) end,
+            function(text) if mh.db then mh.Set(key, text) end end)
+        input:SetPoint("LEFT", 110, 0)
+        page.refreshers[#page.refreshers + 1] = function()
+            if not input:HasFocus() then input:SetText(db()[key] or "") end
+        end
+    end
+    Section(page, "Subject")
+    ToggleRow(page, "Subject from the first item", "\"Item (20)\", like the game used to do. A subject you type stays.",
+        function() return db().subject ~= false end, function(v) mh.Set("subject", v) end)
+    ToggleRow(page, "Gold as subject", "A mail with only money gets the amount as subject, e.g. \"12g 50s\".",
+        function() return db().money ~= false end, function(v) mh.Set("money", v) end)
+    Section(page, "Status")
+    local row = Row(page, "This character", "Who you are, and who gets your mail.")
+    local state = Text(row, 12, ACCENT, MONO ~= nil)
+    state:SetPoint("RIGHT", -14, 0)
+    state:SetJustifyH("RIGHT")
+    page.refreshers[#page.refreshers + 1] = function()
+        local me = mh.MyName() or "?"
+        local other = mh.Partner(me, db().a, db().b)
+        state:SetText(me .. "  ->  " .. (other or "|cffff5050not in the pair|r"))
+    end
+    Note(page, "Forever turned C.O.D. off, and with it the game's own subject: that is why mails stopped getting one.")
+    page:Finish()
+end
+
+-- ---------------------------------------------------------------------------
 -- target debuffs
 
 local function BuildTargetDebuffsPage(page)
@@ -1052,12 +1125,16 @@ local function BuildTargetDebuffsPage(page)
     Section(page, "Track")
     for _, slot in ipairs(td.SLOTS) do
         local key = slot.key
-        ToggleRow(page, slot.label, "Any rank, only when another player cast it.",
+        ToggleRow(page, slot.label, "Any rank, any caster, only while it is on your target.",
             function() return get(key) ~= false end, function(v) td.Set(key, v) end)
     end
     Section(page, "Your own")
-    ToggleRow(page, "Show mine in the EllesmereUI bar", "Puts Faerie Fire and Demoralizing Roar into the Cooldown Manager's tracked buffs at login and after every layout import.",
-        function() return get("cdmTrack") ~= false end, function(v) td.Set("cdmTrack", v) end)
+    ToggleRow(page, "Show mine too", "Your Faerie Fire and Demoralizing Roar in this row. Off: only other players' debuffs.",
+        function() return get("mine") ~= false end, function(v) td.Set("mine", v) end)
+    ToggleRow(page, "Moonfire only while it ticks", "Switches Moonfire's Always Show off in the EllesmereUI bar, so it is not there grey without a target. Off: back to Naowh's setting.",
+        function() return get("moonfire") ~= false end, function(v) td.Set("moonfire", v) end)
+    ToggleRow(page, "Mine in the EllesmereUI bar instead", "Old way: puts Faerie Fire and Demoralizing Roar into the Cooldown Manager's tracked buffs. Switch Show mine too off with it, or they show twice.",
+        function() return get("cdmTrack") == true end, function(v) td.Set("cdmTrack", v) end)
     Section(page, "Position")
     ToggleRow(page, "Match the bar", "Size, shape and spacing as the EllesmereUI buff bar draws its icons.",
         function() return get("matchBar") ~= false end, function(v) td.Set("matchBar", v) end)
@@ -1071,7 +1148,7 @@ local function BuildTargetDebuffsPage(page)
         function() return get("y") end, function(v) td.Set("y", v) end)
     page:HookScript("OnShow", function() td.SetPreview(true) end)
     page:HookScript("OnHide", function() td.SetPreview(false) end)
-    Note(page, "An icon shows only while another player's debuff is on your target: a warrior's shout, another druid's Faerie Fire. Your own show in the EllesmereUI bar (switch above). While this page is open both icons show as a preview. PvE only: hidden in battlegrounds, arenas and on player targets.")
+    Note(page, "An icon shows only while the debuff is on your target: yours, a warrior's shout, another druid's Faerie Fire. Moonfire stays in the EllesmereUI bar. While this page is open both icons show as a preview. PvE only: hidden in battlegrounds, arenas and on player targets.")
     page:Finish()
 end
 
@@ -1587,6 +1664,8 @@ local function BuildLayerPage(page)
         function() return db().enabled end, function(v) lh.Set("enabled", v) end)
     ToggleRow(page, "No lock after swaps", "LayerSwap holds Host on 4 min after every swap. This drops the lock: Host goes off again as soon as you leave the host's group.",
         function() return db().noLock ~= false end, function(v) lh.Set("noLock", v); lh.GuardLock() end)
+    ToggleRow(page, "No hourly swap limit", "LayerSwap stops asking after 10 swaps in an hour (the game's limit, as LayerSwap counts it). This drops its count. If the game really refuses, the host just cannot move you.",
+        function() return db().noCap ~= false end, function(v) lh.Set("noCap", v); lh.GuardLock() end)
     local function StatusRow(label, desc, get)
         local row = Row(page, label, desc)
         local t = Text(row, 12, ACCENT, MONO ~= nil)
@@ -1605,6 +1684,10 @@ local function BuildLayerPage(page)
     StatusRow("Locks dropped", "Swap locks LayerSwap wanted this session.", function()
         if not lh.LockGuarded() then return db().noLock == false and "off" or "-" end
         return tostring(lh.dropped or 0)
+    end)
+    StatusRow("Swap counts dropped", "Times LayerSwap wanted to count a swap this session.", function()
+        if not lh.CapGuarded() then return db().noCap == false and "off" or "-" end
+        return tostring(lh.capDropped or 0)
     end)
     StatusRow("At the next login", "What you leave it at when you log out.", function()
         if not db().enabled then return "LayerSwap decides (on)" end
@@ -1685,11 +1768,15 @@ TABS = {
         { key = "marks", label = "Auto mark", module = "AutoMark", sub = "Raid marks on your own group, nobody else in it.", build = BuildMarksPage },
         { key = "friends", label = "Friend tooltips", module = "FriendTips", sub = "Class, level, faction, zone and more when you hover a friend.", build = BuildFriendTipsPage },
     } },
-    { group = "GOLD" },
+    { group = "GOLD & MAIL" },
     { key = "gold", label = "Vendor & stockpile", icon = "Interface\\Icons\\INV_Misc_Coin_04", module = "VendorCoin", subs = {
         { key = "vendor", label = "Vendor coin", sub = "Red coin on items the vendor pays more for than the AH.", build = BuildVendorPage },
         { key = "stockpile", label = "Stockpile", sub = "Keep raid materials for later, see cheap prices, snipe them.", build = BuildStockpilePage },
     } },
+    { key = "weekly", label = "Weekly reminder", sub = "Pix Xizzix's weekly and the Winterspring daily, on screen and in the quest log.",
+        icon = "Interface\\Icons\\INV_Misc_Bag_10", module = "WeeklyReminder", build = BuildWeeklyPage },
+    { key = "mail", label = "Mail helper", sub = "Your other character as recipient, a subject on every mail.",
+        icon = "Interface\\Icons\\INV_Letter_15", module = "MailHelper", build = BuildMailPage },
     { group = "OTHER ADDONS" },
     { key = "naowhgroup", label = "Naowh", icon = "Interface\\Icons\\INV_Scroll_03", subs = {
         { key = "naowh", label = "Tweaks", module = "NaowhTweaks", sub = "Small changes to Naowh Forever, without touching its files.", build = BuildNaowhPage },

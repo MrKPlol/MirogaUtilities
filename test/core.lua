@@ -39,5 +39,5 @@ mu("t"); ok(not calls.target and calls.say and calls.say:find("is off"), "/mu t 
 root.SetModule("Weather", true)
 ok(not root.IsOff("Weather") and MirogaUtilitiesDB.off.Weather == nil, "switch on clears the entry")
 ok(root.Stopped("Weather"), "still stopped until reload")
-ok(#root.MODULES == 15, "fifteen modules listed")
+ok(#root.MODULES == 17, "seventeen modules listed")
 print(n .. " checks, " .. bad .. " failures"); os.exit(bad == 0 and 0 or 1)
